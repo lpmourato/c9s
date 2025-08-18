@@ -1,0 +1,21 @@
+# Go build output
+c9s
+*.exe
+*.out
+*.test
+
+# Dependency directories
+vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

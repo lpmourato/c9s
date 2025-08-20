@@ -76,8 +76,8 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	// Update header immediately
 	view.updateHeader()
 
-	// Set the flex layout as the root primitive and give the table focus
-	app.SetRoot(flex, true)
+	// Set the flex layout as the main view and give the table focus
+	app.SetMainView(flex)
 	app.SetFocus(view)
 
 	// Load mock data
@@ -222,5 +222,9 @@ func (v *CloudRunView) showLogs() {
 	}
 
 	serviceName := v.GetCell(row, 0).Text
-	v.SetTitle(fmt.Sprintf(" Cloud Run Services - Logs for %s ", serviceName))
+	region := v.GetCell(row, 1).Text
+
+	// Create and show the log view
+	logView := NewLogView(v.app, serviceName, region)
+	v.app.SwitchToView(logView)
 }

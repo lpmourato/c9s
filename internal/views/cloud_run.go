@@ -12,10 +12,11 @@ import (
 // CloudRunView represents the Cloud Run services view
 type CloudRunView struct {
 	*ui.Table
-	app         *ui.App
-	headerTable *tview.Table
-	project     string
-	region      string
+	app          *ui.App
+	headerTable  *tview.Table
+	commandInput *ui.CommandInput
+	project      string
+	region       string
 }
 
 // NewCloudRunView returns a new Cloud Run view
@@ -48,20 +49,85 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	flex.AddItem(headerTable, 5, 0, false) // Header height for 2 rows + shortcuts
 	flex.AddItem(table, 0, 1, true)        // Table takes remaining space
 
+	// Create command input
+	cmdInput := ui.NewCommandInput(app, table)
+
 	view := &CloudRunView{
-		Table:       table,
-		app:         app,
-		headerTable: headerTable,
-		project:     "dev-tla-cm",
-		region:      "europe-west4",
+		Table:        table,
+		app:          app,
+		headerTable:  headerTable,
+		commandInput: cmdInput,
+		project:      "dev-tla-cm",
+		region:       "europe-west4",
 	}
+
+	// Set command handler
+	cmdInput.SetCommandHandler(func(cmd string, args []string) bool {
+		switch cmd {
+		case "quit", "q":
+			view.app.Stop()
+			return true
+		case "region", "rg":
+			if len(args) == 0 {
+				return false
+			}
+			view.region = args[0]
+		case "project", "proj":
+			if len(args) == 0 {
+				return false
+			}
+			view.project = args[0]
+		case "service", "svc":
+			if len(args) == 0 {
+				return false
+			}
+			// TODO: implement service filtering
+		default:
+			return false
+		}
+
+		view.updateHeader()
+		return true
+	})
 
 	// Set up the table
 	view.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
 	view.SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorNavy))
 
-	// Set up input handlers at the table level
-	view.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	// Update header immediately
+	view.updateHeader()
+
+	// Create flex layout
+	var mainFlex, commandFlex *tview.Flex
+
+	mainFlex = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(headerTable, 5, 0, false).
+		AddItem(table, 0, 1, true)
+
+	commandFlex = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(mainFlex, 0, 1, true).
+		AddItem(view.commandInput, 1, 0, false)
+
+	// Set up input handlers at the root level
+	commandFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Shift+: is usually ':' character
+		if event.Key() == tcell.KeyRune {
+			// Check for ':' character (which is what Shift+: produces)
+			if event.Rune() == ':' {
+				if !cmdInput.IsVisible() {
+					cmdInput.Show()
+					return nil
+				}
+			}
+		}
+		// If command input is visible, let it handle the event
+		if cmdInput.IsVisible() {
+			return event
+		}
+
+		// Handle other keyboard shortcuts
 		switch event.Key() {
 		case tcell.KeyCtrlD:
 			view.showServiceDescription()
@@ -73,14 +139,9 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 		return event
 	})
 
-	// Update header immediately
-	view.updateHeader()
-
-	// Set the flex layout as the main view and give the table focus
-	app.SetMainView(flex)
-	app.SetFocus(view)
-
-	// Load mock data
+	// Set the command flex as the main view and give the table focus
+	app.SetMainView(commandFlex)
+	app.SetFocus(view) // Load mock data
 	view.loadMockData()
 
 	return view
@@ -197,12 +258,47 @@ func (v *CloudRunView) updateHeader() {
 		SetSelectable(false)
 	v.headerTable.SetCell(len(rows), 1, shortcutsCell)
 
-	// Add empty cell in the shortcuts row
-	emptyShortcutCell := tview.NewTableCell("").
+	// Add command hint/input row
+	cmdCell := tview.NewTableCell("").
 		SetBackgroundColor(tcell.ColorBlack).
 		SetSelectable(false)
-	v.headerTable.SetCell(len(rows), 0, emptyShortcutCell)
-	v.headerTable.SetCell(len(rows), 2, emptyShortcutCell)
+	v.headerTable.SetCell(len(rows), 0, cmdCell)
+
+	if v.commandInput.IsVisible() {
+		cmdPromptCell := tview.NewTableCell(v.commandInput.GetText()).
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignLeft).
+			SetBackgroundColor(tcell.ColorBlack)
+		v.headerTable.SetCell(len(rows), 1, cmdPromptCell)
+	} else {
+		cmdHintCell := tview.NewTableCell("Type Shift+: for commands").
+			SetTextColor(tcell.ColorGray).
+			SetAlign(tview.AlignLeft).
+			SetBackgroundColor(tcell.ColorBlack)
+		v.headerTable.SetCell(len(rows), 1, cmdHintCell)
+	}
+
+	emptyCmdCell := tview.NewTableCell("").
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(len(rows), 2, emptyCmdCell)
+
+	// Add shortcuts row
+	helpRow := len(rows) + 1
+	helpCell := tview.NewTableCell("Enter(Logs) Ctrl+D(Description)").
+		SetTextColor(tcell.ColorGray).
+		SetExpansion(1).
+		SetAlign(tview.AlignRight).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(helpRow, 1, helpCell)
+
+	// Add empty cells in the shortcuts row
+	emptyHelpCell := tview.NewTableCell("").
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(helpRow, 0, emptyHelpCell)
+	v.headerTable.SetCell(helpRow, 2, emptyHelpCell)
 } // showServiceDescription displays detailed information about the selected service
 func (v *CloudRunView) showServiceDescription() {
 	row, _ := v.GetSelection()

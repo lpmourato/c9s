@@ -5,7 +5,6 @@ import (
 	"flag"
 	"log"
 	"os"
-	"time"
 
 	"github.com/lpmourato/c9s/internal/gcp"
 	"github.com/lpmourato/c9s/internal/ui"
@@ -13,55 +12,54 @@ import (
 )
 
 var (
-	project = flag.String("project", "", "GCP project ID")
-	region  = flag.String("region", "", "GCP region")
+	project  = flag.String("project", "", "GCP project ID")
+	region   = flag.String("region", "", "GCP region")
+	testMode = flag.Bool("test", false, "Run in test mode with mock data")
 )
 
 func main() {
 	flag.Parse()
 
-	// Use environment variables as fallback
-	if *project == "" {
-		*project = os.Getenv("GCP_PROJECT")
-	}
-	if *region == "" {
-		*region = os.Getenv("GCP_REGION")
-	}
-
-	if *project == "" || *region == "" {
-		log.Fatal("Project ID and region are required. Set via flags or GCP_PROJECT/GCP_REGION environment variables")
+	// In test mode, use mock values
+	if *testMode {
+		*project = "mock-project"
+		*region = "us-central1"
+	} else {
+		// Use environment variables as fallback
+		if *project == "" {
+			*project = os.Getenv("GCP_PROJECT")
+		}
+		if *region == "" {
+			*region = os.Getenv("GCP_REGION")
+		}
 	}
 
 	ctx := context.Background()
-	client, err := gcp.NewClient(ctx, *project, *region)
-	if err != nil {
-		log.Fatalf("Failed to create GCP client: %v", err)
+
+	var client *gcp.Client
+	var err error
+
+	if *testMode {
+		// Create test client with mock data
+		client = gcp.NewTestClient(*project, *region)
+	} else {
+		// Create real client
+		client, err = gcp.NewClient(ctx, *project, *region)
+		if err != nil {
+			log.Fatalf("Failed to create GCP client: %v", err)
+		}
 	}
 
 	app := ui.NewApp()
-	mainView := views.NewCloudRunView(ctx, client)
-	app.SetRoot(mainView, true)
+	mainView := views.NewCloudRunView(ctx, client, app)
 
-	// Refresh the view periodically
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(10 * time.Second):
-				app.QueueUpdateDraw(func() {
-					if err := mainView.Refresh(ctx); err != nil {
-						log.Printf("Error refreshing view: %v", err)
-					}
-				})
-			}
-		}
-	}()
+	// Set up pages
+	app.GetPages().AddPage("main", mainView, true, true)
 
-	if err := mainView.Refresh(ctx); err != nil {
-		log.Printf("Initial refresh failed: %v", err)
-	}
+	// Start the refresh timer in the background
+	go mainView.StartRefreshTimer(ctx)
 
+	// Run the app (this blocks until the app exits)
 	if err := app.Run(); err != nil {
 		log.Fatalf("Error running application: %v", err)
 	}

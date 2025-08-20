@@ -7,6 +7,7 @@ import (
 
 	logging "cloud.google.com/go/logging/apiv2"
 	loggingpb "cloud.google.com/go/logging/apiv2/loggingpb"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 // LogStream handles streaming logs from Cloud Run services
@@ -33,6 +34,7 @@ func (ls *LogStream) StreamLogs(ctx context.Context, project, service string, w 
 	req := &loggingpb.TailLogEntriesRequest{
 		ResourceNames: []string{fmt.Sprintf("projects/%s", project)},
 		Filter:       filter,
+		BufferWindow: &durationpb.Duration{Seconds: 20}, // Buffer 20s of logs
 	}
 
 	stream, err := ls.client.TailLogEntries(ctx)
@@ -54,15 +56,28 @@ func (ls *LogStream) StreamLogs(ctx context.Context, project, service string, w 
 		}
 
 		for _, entry := range resp.Entries {
-			payload := ""
-			if entry.GetTextPayload() != "" {
+			var payload string
+			switch {
+			case entry.GetTextPayload() != "":
 				payload = entry.GetTextPayload()
-			} else if jsonPayload := entry.GetJsonPayload(); jsonPayload != nil {
-				payload = jsonPayload.String()
+			case entry.GetJsonPayload() != nil:
+				payload = entry.GetJsonPayload().String()
+			case entry.GetProtoPayload() != nil:
+				payload = entry.GetProtoPayload().String()
+			default:
+				continue
 			}
-			fmt.Fprintf(w, "[%s] %s\n", 
+
+			severity := entry.GetSeverity().String()
+			fmt.Fprintf(w, "[%s] [%s] %s\n", 
 				entry.GetTimestamp().AsTime().Format("2006-01-02 15:04:05"),
+				severity,
 				payload)
+		}
+		
+		// Force a redraw of the view
+		if flusher, ok := w.(interface{ Flush() }); ok {
+			flusher.Flush()
 		}
 	}
 }

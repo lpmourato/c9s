@@ -41,29 +41,6 @@ func NewTable() *Table {
 	t.SetFixed(1, 0)
 	t.SetSeparator(tview.Borders.Vertical)
 
-	// Handle keyboard input directly
-	t.Table.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		row, col := t.GetSelection()
-
-		switch event.Key() {
-		case tcell.KeyUp:
-			if row > 1 { // Don't go into header row
-				t.Select(row-1, col)
-			}
-			return nil
-		case tcell.KeyDown:
-			if row < t.GetRowCount()-1 {
-				t.Select(row+1, col)
-			}
-			return nil
-		case tcell.KeyEnter, tcell.KeyCtrlL:
-			if t.app != nil {
-				return t.app.handleInputCapture(event)
-			}
-		}
-		return event
-	})
-
 	return t
 }
 
@@ -132,11 +109,6 @@ func (t *Table) Clear() {
 // GetColumnCount returns the number of columns
 func (t *Table) GetColumnCount() int {
 	return t.Table.GetColumnCount()
-}
-
-// GetRowCount returns the number of rows
-func (t *Table) GetRowCount() int {
-	return t.Table.GetRowCount()
 }
 
 // NewTableCell creates a new table cell

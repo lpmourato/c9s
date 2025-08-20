@@ -20,7 +20,6 @@ func NewApp() *App {
 
 	// Force periodic screen updates
 	app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		// Force redraw every time
 		screen.Clear()
 		return false
 	})
@@ -34,22 +33,7 @@ func (a *App) GetPages() *tview.Pages {
 	return a.pages
 }
 
-// SwitchToView switches to a view
-func (a *App) SwitchToView(name string, data interface{}) {
-	if name == "logs" {
-		// Log view can handle its own page management
-		return
-	}
-	a.pages.SwitchToPage(name)
-}
-
 // Stop stops the application
 func (a *App) Stop() {
 	a.Application.Stop()
-}
-
-// HandleInputCapture handles key events coming from embedded components
-func (a *App) handleInputCapture(event *tcell.EventKey) *tcell.EventKey {
-	// Let all keys pass through to be handled by the focused primitive
-	return event
 }

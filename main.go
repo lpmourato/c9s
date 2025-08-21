@@ -16,27 +16,29 @@ func main() {
 	testMode := flag.Bool("test", false, "Run in test mode with mock data")
 	jsonFile := flag.String("json", "", "Path to JSON file with service data")
 	mysqlConn := flag.String("mysql", "", "MySQL connection string")
+	projectID := flag.String("project", "", "GCP project ID")
+	region := flag.String("region", "", "Cloud Run region (e.g., us-central1)")
 	flag.Parse()
 
 	app := ui.NewApp()
 
 	// Create config with default settings
 	cfg := &config.CloudRunConfig{
-		ProjectID: "", // Will be set via command
-		Region:    "", // Will be set via command
+		ProjectID: *projectID, // Set from command line
+		Region:    *region,    // Set from command line
 	}
 
 	// Create data source config based on flags
 	var dsType datasource.Type
 	dsConfig := &datasource.Config{
-		ProjectID: cfg.ProjectID,
-		Region:    cfg.Region,
+		ProjectID:  cfg.ProjectID,
+		Region:     cfg.Region,
+		MockedData: model.GetDefaultMockData(),
 	}
 
 	switch {
 	case *testMode:
 		dsType = datasource.Mock
-		dsConfig.MockedData = model.GetDefaultMockData()
 	case *jsonFile != "":
 		dsType = datasource.JSON
 		dsConfig.JSONPath = *jsonFile
@@ -45,6 +47,9 @@ func main() {
 		dsConfig.MySQLConn = *mysqlConn
 	default:
 		dsType = datasource.GCP
+		if cfg.ProjectID == "" {
+			log.Fatal("Project ID is required. Use --project flag or set GOOGLE_CLOUD_PROJECT environment variable")
+		}
 	}
 	dsConfig.Type = dsType
 

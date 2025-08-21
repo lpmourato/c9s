@@ -44,7 +44,7 @@ func Factory(cfg *Config) (DataSource, error) {
 	case Mock:
 		return newMockDataSource(cfg.MockedData), nil
 	case GCP:
-		return newGCPDataSource(cfg.ProjectID), nil
+		return newGCPDataSource(cfg.ProjectID)
 	case MySQL:
 		return newMySQLDataSource(cfg.MySQLConn), nil
 	case JSON:

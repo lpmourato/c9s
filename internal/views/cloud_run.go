@@ -7,20 +7,21 @@ import (
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
 	"github.com/lpmourato/c9s/internal/config"
-	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/datasource"
+	"github.com/lpmourato/c9s/internal/model"
 	"github.com/lpmourato/c9s/internal/ui"
 )
 
 // CloudRunView represents the Cloud Run services view
 type CloudRunView struct {
 	*ui.Table
-	app             *ui.App
-	headerTable     *ui.HeaderTable
-	commandInput    *ui.CommandInput
-	config          *config.CloudRunConfig
-	serviceProvider cloudrun.ServiceProvider
-	services        []cloudrun.Service
-	filter          string // Current service name filter
+	app          *ui.App
+	headerTable  *ui.HeaderTable
+	commandInput *ui.CommandInput
+	config       *config.CloudRunConfig
+	dataSource   datasource.DataSource
+	services     []model.Service
+	filter       string // Current service name filter
 }
 
 // Verify CloudRunView implements CommandHandler interface
@@ -56,7 +57,7 @@ func (v *CloudRunView) HandleService(service string) error {
 	// Apply filter and update table
 	rowIndex := 1 // Skip header
 	for _, svc := range v.services {
-		if service == "" || strings.Contains(strings.ToLower(svc.Name), strings.ToLower(service)) {
+		if service == "" || strings.Contains(strings.ToLower(svc.GetName()), strings.ToLower(service)) {
 			v.updateServiceRow(rowIndex, svc)
 			rowIndex++
 		}
@@ -82,7 +83,7 @@ func (v *CloudRunView) HandleQuit() {
 }
 
 // NewCloudRunView returns a new Cloud Run view
-func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, provider cloudrun.ServiceProvider) *CloudRunView {
+func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, ds datasource.DataSource) *CloudRunView {
 	table := ui.NewTable()
 	table.SetApp(app)
 	table.SetSelectable(true, false)
@@ -92,11 +93,11 @@ func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, provider cloudrun.
 	headerTable.SetTitle(" Cloud Run Context ")
 
 	view := &CloudRunView{
-		Table:           table,
-		app:             app,
-		headerTable:     headerTable,
-		config:          cfg,
-		serviceProvider: provider,
+		Table:       table,
+		app:         app,
+		headerTable: headerTable,
+		config:      cfg,
+		dataSource:  ds,
 	}
 
 	// Set up the table columns and style
@@ -154,9 +155,9 @@ func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, provider cloudrun.
 func (v *CloudRunView) loadServices() error {
 	var err error
 	if v.config.Region != "" {
-		v.services, err = v.serviceProvider.GetServicesByRegion(v.config.Region)
+		v.services, err = v.dataSource.GetServicesByRegion(v.config.Region)
 	} else {
-		v.services, err = v.serviceProvider.GetServices()
+		v.services, err = v.dataSource.GetServices()
 	}
 	if err != nil {
 		return err
@@ -167,7 +168,7 @@ func (v *CloudRunView) loadServices() error {
 	v.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
 
 	for i, svc := range v.services {
-		if v.filter == "" || strings.Contains(strings.ToLower(svc.Name), strings.ToLower(v.filter)) {
+		if v.filter == "" || strings.Contains(strings.ToLower(svc.GetName()), strings.ToLower(v.filter)) {
 			v.updateServiceRow(i+1, svc)
 		}
 	}
@@ -179,33 +180,33 @@ func (v *CloudRunView) loadServices() error {
 }
 
 // updateServiceRow updates a single row in the table with service data
-func (v *CloudRunView) updateServiceRow(row int, svc cloudrun.Service) {
+func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
 	cells := []ui.TableCell{
 		{
-			Text:      svc.Name,
+			Text:      svc.GetName(),
 			Expansion: 1,
 		},
 		{
-			Text:      svc.Region,
+			Text:      svc.GetRegion(),
 			Expansion: 1,
 		},
 		{
-			Text:      svc.URL,
+			Text:      svc.GetURL(),
 			Expansion: 2,
 		},
 		{
-			Text:      svc.Status,
-			TextColor: ui.StatusColor(svc.Status),
+			Text:      svc.GetStatus(),
+			TextColor: ui.StatusColor(svc.GetStatus()),
 			Expansion: 1,
 		},
 		{
-			Text:      svc.LastDeploy.Format("2006-01-02 15:04:05"),
+			Text:      svc.GetLastDeploy().Format("2006-01-02 15:04:05"),
 			Expansion: 1,
 			Align:     tview.AlignRight,
 		},
 		{
-			Text:      svc.Traffic,
-			TextColor: ui.TrafficColor(svc.Traffic),
+			Text:      svc.GetTraffic(),
+			TextColor: ui.TrafficColor(svc.GetTraffic()),
 			Expansion: 2,
 		},
 	}

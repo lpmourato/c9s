@@ -4,37 +4,47 @@ import (
 	"time"
 
 	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/model"
 )
 
 type mockProvider struct{}
 
 // NewMockProvider creates a new mock service provider
-func NewMockProvider() cloudrun.ServiceProvider {
+func NewMockProvider() cloudrun.CloudRunProvider {
 	return &mockProvider{}
 }
 
-func (p *mockProvider) GetServices() ([]cloudrun.Service, error) {
-	return getMockServices(), nil
+func (p *mockProvider) GetServices() ([]model.Service, error) {
+	services := getMockServices()
+	result := make([]model.Service, len(services))
+	for i, svc := range services {
+		result[i] = &svc
+	}
+	return result, nil
 }
 
-func (p *mockProvider) GetServicesByRegion(region string) ([]cloudrun.Service, error) {
+func (p *mockProvider) GetServicesByRegion(region string) ([]model.Service, error) {
 	services := getMockServices()
 	if region == "" {
-		return services, nil
+		result := make([]model.Service, len(services))
+		for i, svc := range services {
+			result[i] = &svc
+		}
+		return result, nil
 	}
 
-	var filtered []cloudrun.Service
+	var filtered []model.Service
 	for _, svc := range services {
 		if svc.Region == region {
-			filtered = append(filtered, svc)
+			filtered = append(filtered, &svc)
 		}
 	}
 	return filtered, nil
 }
 
-func getMockServices() []cloudrun.Service {
+func getMockServices() []cloudrun.CloudRunService {
 	now := time.Now()
-	return []cloudrun.Service{
+	return []cloudrun.CloudRunService{
 		{
 			Name:       "service-a",
 			Region:     "us-central1",

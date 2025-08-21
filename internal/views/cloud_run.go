@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
@@ -17,6 +18,60 @@ type CloudRunView struct {
 	commandInput *ui.CommandInput
 	project      string
 	region       string
+	services     []model.Service // Store all services
+	filter       string          // Current service name filter
+}
+
+// Verify CloudRunView implements CommandHandler interface
+var _ ui.CommandHandler = (*CloudRunView)(nil)
+
+// HandleRegion implements CommandHandler
+func (v *CloudRunView) HandleRegion(region string) error {
+	v.region = region
+	v.updateHeader()
+	return nil
+}
+
+// HandleProject implements CommandHandler
+func (v *CloudRunView) HandleProject(project string) error {
+	v.project = project
+	v.updateHeader()
+	return nil
+}
+
+// HandleService implements CommandHandler
+func (v *CloudRunView) HandleService(service string) error {
+	v.filter = service
+	// Clear and reload the table with the filter
+	v.Clear()
+	v.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
+
+	// Apply filter and update table
+	rowIndex := 1 // Skip header
+	for _, svc := range v.services {
+		if service == "" || strings.Contains(strings.ToLower(svc.GetName()), strings.ToLower(service)) {
+			v.updateServiceRow(rowIndex, svc)
+			rowIndex++
+		}
+	}
+
+	if rowIndex > 1 {
+		v.Select(1, 0) // Select first matching row
+	}
+
+	v.updateHeader()
+	return nil
+}
+
+// HandleClear implements CommandHandler
+func (v *CloudRunView) HandleClear() error {
+	v.filter = ""
+	return v.HandleService("") // Reuse service handler with empty filter
+}
+
+// HandleQuit implements CommandHandler
+func (v *CloudRunView) HandleQuit() {
+	v.app.Stop()
 }
 
 // NewCloudRunView returns a new Cloud Run view
@@ -62,33 +117,7 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	}
 
 	// Set command handler
-	cmdInput.SetCommandHandler(func(cmd string, args []string) bool {
-		switch cmd {
-		case "quit", "q":
-			view.app.Stop()
-			return true
-		case "region", "rg":
-			if len(args) == 0 {
-				return false
-			}
-			view.region = args[0]
-		case "project", "proj":
-			if len(args) == 0 {
-				return false
-			}
-			view.project = args[0]
-		case "service", "svc":
-			if len(args) == 0 {
-				return false
-			}
-			// TODO: implement service filtering
-		default:
-			return false
-		}
-
-		view.updateHeader()
-		return true
-	})
+	cmdInput.SetCommandHandler(view)
 
 	// Set up the table
 	view.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
@@ -149,8 +178,8 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 
 // loadMockData loads mock service data into the table
 func (v *CloudRunView) loadMockData() {
-	services := model.GetMockServices()
-	for i, svc := range services {
+	v.services = model.GetMockServices()
+	for i, svc := range v.services {
 		row := i + 1 // Skip header row
 		v.updateServiceRow(row, svc)
 	}
@@ -213,92 +242,102 @@ func (v *CloudRunView) updateHeader() {
 	// Clear the header table
 	v.headerTable.Clear()
 
-	// Define the rows
-	rows := []struct {
-		field string
-		value string
-	}{
-		{"Project ID", v.project},
-		{"Region", v.region},
-	}
+	// Left column: Project and Region info
+	fieldCell := tview.NewTableCell("Project ID").
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(0).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(0, 0, fieldCell)
 
-	// Add the rows
-	for i, row := range rows {
-		// Field column
-		fieldCell := tview.NewTableCell(row.field).
-			SetTextColor(tcell.ColorWhite).
-			SetExpansion(0).
-			SetAlign(tview.AlignLeft).
-			SetBackgroundColor(tcell.ColorBlack).
-			SetSelectable(false)
-		v.headerTable.SetCell(i, 0, fieldCell)
+	valueCell := tview.NewTableCell(v.project).
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(1).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(0, 1, valueCell)
 
-		// Value column
-		valueCell := tview.NewTableCell(row.value).
-			SetTextColor(tcell.ColorWhite).
-			SetExpansion(1).
-			SetAlign(tview.AlignLeft).
-			SetBackgroundColor(tcell.ColorBlack).
-			SetSelectable(false)
-		v.headerTable.SetCell(i, 1, valueCell)
+	fieldCell = tview.NewTableCell("Region").
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(0).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(1, 0, fieldCell)
 
-		// Add empty cell to fill the rest of the row
-		emptyCell := tview.NewTableCell("").
-			SetBackgroundColor(tcell.ColorBlack).
-			SetSelectable(false)
-		v.headerTable.SetCell(i, 2, emptyCell)
-	}
+	valueCell = tview.NewTableCell(v.region).
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(1).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(1, 1, valueCell)
 
-	// Add shortcuts in a new row
-	shortcutsCell := tview.NewTableCell("Enter(Logs) Ctrl+D(Description)").
+	// Right column: Shortcuts and Commands
+	shortcutsTitle := tview.NewTableCell("Keyboard Shortcuts").
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(0).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(0, 3, shortcutsTitle)
+
+	shortcuts := tview.NewTableCell("Enter(Logs) Ctrl+D(Description)").
 		SetTextColor(tcell.ColorGray).
 		SetExpansion(1).
-		SetAlign(tview.AlignRight).
+		SetAlign(tview.AlignLeft).
 		SetBackgroundColor(tcell.ColorBlack).
 		SetSelectable(false)
-	v.headerTable.SetCell(len(rows), 1, shortcutsCell)
+	v.headerTable.SetCell(0, 4, shortcuts)
 
-	// Add command hint/input row
-	cmdCell := tview.NewTableCell("").
+	commandsTitle := tview.NewTableCell("Commands").
+		SetTextColor(tcell.ColorWhite).
+		SetExpansion(0).
+		SetAlign(tview.AlignLeft).
 		SetBackgroundColor(tcell.ColorBlack).
 		SetSelectable(false)
-	v.headerTable.SetCell(len(rows), 0, cmdCell)
+	v.headerTable.SetCell(1, 3, commandsTitle)
 
+	commands := tview.NewTableCell(":region(rg) :project(proj) :service(svc) :clear(cl) :quit(q)").
+		SetTextColor(tcell.ColorGray).
+		SetExpansion(1).
+		SetAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorBlack).
+		SetSelectable(false)
+	v.headerTable.SetCell(1, 4, commands)
+
+	// Command input/hint row
+	hintRow := 2
+	cmdHint := "Type Shift+: for commands"
 	if v.commandInput.IsVisible() {
-		cmdPromptCell := tview.NewTableCell(v.commandInput.GetText()).
-			SetTextColor(tcell.ColorWhite).
-			SetAlign(tview.AlignLeft).
-			SetBackgroundColor(tcell.ColorBlack)
-		v.headerTable.SetCell(len(rows), 1, cmdPromptCell)
-	} else {
-		cmdHintCell := tview.NewTableCell("Type Shift+: for commands").
-			SetTextColor(tcell.ColorGray).
-			SetAlign(tview.AlignLeft).
-			SetBackgroundColor(tcell.ColorBlack)
-		v.headerTable.SetCell(len(rows), 1, cmdHintCell)
+		cmdHint = v.commandInput.GetText()
 	}
 
-	emptyCmdCell := tview.NewTableCell("").
+	textColor := tcell.ColorGray
+	if v.commandInput.IsVisible() {
+		textColor = tcell.ColorWhite
+	}
+	cmdHintCell := tview.NewTableCell(cmdHint).
+		SetTextColor(textColor).
+		SetAlign(tview.AlignLeft).
 		SetBackgroundColor(tcell.ColorBlack).
 		SetSelectable(false)
-	v.headerTable.SetCell(len(rows), 2, emptyCmdCell)
 
-	// Add shortcuts row
-	helpRow := len(rows) + 1
-	helpCell := tview.NewTableCell("Enter(Logs) Ctrl+D(Description)").
-		SetTextColor(tcell.ColorGray).
-		SetExpansion(1).
-		SetAlign(tview.AlignRight).
+	v.headerTable.SetCell(hintRow, 0, tview.NewTableCell("").
 		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(helpRow, 1, helpCell)
+		SetSelectable(false))
+	v.headerTable.SetCell(hintRow, 1, cmdHintCell)
 
-	// Add empty cells in the shortcuts row
-	emptyHelpCell := tview.NewTableCell("").
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(helpRow, 0, emptyHelpCell)
-	v.headerTable.SetCell(helpRow, 2, emptyHelpCell)
+	// Add separator between left and right columns
+	for i := 0; i < 3; i++ {
+		v.headerTable.SetCell(i, 2, tview.NewTableCell("│").
+			SetTextColor(tcell.ColorGray).
+			SetBackgroundColor(tcell.ColorBlack).
+			SetSelectable(false).
+			SetAlign(tview.AlignCenter))
+	}
 } // showServiceDescription displays detailed information about the selected service
 func (v *CloudRunView) showServiceDescription() {
 	row, _ := v.GetSelection()

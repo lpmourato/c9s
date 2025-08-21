@@ -14,7 +14,7 @@ import (
 type CloudRunView struct {
 	*ui.Table
 	app          *ui.App
-	headerTable  *tview.Table
+	headerTable  *ui.HeaderTable
 	commandInput *ui.CommandInput
 	project      string
 	region       string
@@ -81,14 +81,7 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	table.SetSelectable(true, false)
 
 	// Create header table for session info
-	headerTable := tview.NewTable().
-		SetBorders(false).
-		SetSelectable(false, false)
-
-	// Set styling similar to services table
-	headerTable.SetBackgroundColor(tcell.ColorBlack)
-	headerTable.SetBorder(true)
-	headerTable.SetBorderColor(tcell.ColorGray)
+	headerTable := ui.NewHeaderTable()
 	headerTable.SetTitle(" Cloud Run Context ")
 
 	// Remove selection highlighting
@@ -188,156 +181,59 @@ func (v *CloudRunView) loadMockData() {
 
 // updateServiceRow updates a single row in the table with service data
 func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
-	// Basic service info
-	v.SetCell(row, 0, ui.NewTableCell(svc.GetName()).
-		SetExpansion(1))
-
-	v.SetCell(row, 1, ui.NewTableCell(svc.GetRegion()).
-		SetExpansion(1))
-
-	v.SetCell(row, 2, ui.NewTableCell(svc.GetURL()).
-		SetExpansion(2))
-
-	// Status with color coding
-	statusCell := ui.NewTableCell(svc.GetStatus()).
-		SetExpansion(1)
-
-	switch svc.GetStatus() {
-	case "Ready":
-		statusCell.SetTextColor(tcell.ColorGreen)
-	case "Failed":
-		statusCell.SetTextColor(tcell.ColorRed)
-	case "Updating":
-		statusCell.SetTextColor(tcell.ColorYellow)
-	default:
-		statusCell.SetTextColor(tcell.ColorGray)
+	cells := []ui.TableCell{
+		{
+			Text:      svc.GetName(),
+			Expansion: 1,
+		},
+		{
+			Text:      svc.GetRegion(),
+			Expansion: 1,
+		},
+		{
+			Text:      svc.GetURL(),
+			Expansion: 2,
+		},
+		{
+			Text:      svc.GetStatus(),
+			TextColor: ui.StatusColor(svc.GetStatus()),
+			Expansion: 1,
+		},
+		{
+			Text:      svc.GetLastDeploy().Format("2006-01-02 15:04:05"),
+			Expansion: 1,
+			Align:     tview.AlignRight,
+		},
+		{
+			Text:      svc.GetTraffic(),
+			TextColor: ui.TrafficColor(svc.GetTraffic()),
+			Expansion: 2,
+		},
 	}
-	v.SetCell(row, 3, statusCell)
-
-	// Last deploy time
-	lastDeploy := svc.GetLastDeploy().Format("2006-01-02 15:04:05")
-	v.SetCell(row, 4, ui.NewTableCell(lastDeploy).
-		SetExpansion(1).
-		SetAlign(tview.AlignRight))
-
-	// Traffic with color coding
-	trafficCell := ui.NewTableCell(svc.GetTraffic()).
-		SetExpansion(2)
-
-	switch {
-	case svc.GetTraffic() == "No traffic (failed)":
-		trafficCell.SetTextColor(tcell.ColorRed)
-	case svc.GetTraffic() == "No traffic (stopped)":
-		trafficCell.SetTextColor(tcell.ColorYellow)
-	case svc.GetTraffic() == "No traffic":
-		trafficCell.SetTextColor(tcell.ColorGray)
-	default:
-		trafficCell.SetTextColor(tcell.ColorGreen)
-	}
-	v.SetCell(row, 5, trafficCell)
+	v.AddStyledRow(row, cells)
 }
 
 // updateHeader updates the header content with session info
 func (v *CloudRunView) updateHeader() {
-	// Clear the header table
 	v.headerTable.Clear()
 
 	// Left column: Project and Region info
-	fieldCell := tview.NewTableCell("Project ID").
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(0).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(0, 0, fieldCell)
+	v.headerTable.AddLabelValueRow(0, "Project ID", v.project)
+	v.headerTable.AddLabelValueRow(1, "Region", v.region)
 
-	valueCell := tview.NewTableCell(v.project).
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(1).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(0, 1, valueCell)
-
-	fieldCell = tview.NewTableCell("Region").
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(0).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(1, 0, fieldCell)
-
-	valueCell = tview.NewTableCell(v.region).
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(1).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(1, 1, valueCell)
+	// Add separator
+	v.headerTable.AddSeparator(2, 3)
 
 	// Right column: Shortcuts and Commands
-	shortcutsTitle := tview.NewTableCell("Keyboard Shortcuts").
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(0).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(0, 3, shortcutsTitle)
-
-	shortcuts := tview.NewTableCell("Enter(Logs) Ctrl+D(Description)").
-		SetTextColor(tcell.ColorGray).
-		SetExpansion(1).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(0, 4, shortcuts)
-
-	commandsTitle := tview.NewTableCell("Commands").
-		SetTextColor(tcell.ColorWhite).
-		SetExpansion(0).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(1, 3, commandsTitle)
-
-	commands := tview.NewTableCell(":region(rg) :project(proj) :service(svc) :clear(cl) :quit(q)").
-		SetTextColor(tcell.ColorGray).
-		SetExpansion(1).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-	v.headerTable.SetCell(1, 4, commands)
+	v.headerTable.AddSection(0, 3, "Keyboard Shortcuts", "Enter(Logs) Ctrl+D(Description)")
+	v.headerTable.AddSection(1, 3, "Commands", ":region(rg) :project(proj) :service(svc) :clear(cl) :quit(q)")
 
 	// Command input/hint row
-	hintRow := 2
 	cmdHint := "Type Shift+: for commands"
 	if v.commandInput.IsVisible() {
 		cmdHint = v.commandInput.GetText()
 	}
-
-	textColor := tcell.ColorGray
-	if v.commandInput.IsVisible() {
-		textColor = tcell.ColorWhite
-	}
-	cmdHintCell := tview.NewTableCell(cmdHint).
-		SetTextColor(textColor).
-		SetAlign(tview.AlignLeft).
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false)
-
-	v.headerTable.SetCell(hintRow, 0, tview.NewTableCell("").
-		SetBackgroundColor(tcell.ColorBlack).
-		SetSelectable(false))
-	v.headerTable.SetCell(hintRow, 1, cmdHintCell)
-
-	// Add separator between left and right columns
-	for i := 0; i < 3; i++ {
-		v.headerTable.SetCell(i, 2, tview.NewTableCell("│").
-			SetTextColor(tcell.ColorGray).
-			SetBackgroundColor(tcell.ColorBlack).
-			SetSelectable(false).
-			SetAlign(tview.AlignCenter))
-	}
+	v.headerTable.AddCommandHint(2, cmdHint, v.commandInput.IsVisible())
 } // showServiceDescription displays detailed information about the selected service
 func (v *CloudRunView) showServiceDescription() {
 	row, _ := v.GetSelection()

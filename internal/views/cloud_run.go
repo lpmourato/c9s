@@ -6,20 +6,21 @@ import (
 
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
-	"github.com/lpmourato/c9s/internal/model"
+	"github.com/lpmourato/c9s/internal/config"
+	"github.com/lpmourato/c9s/internal/domain/cloudrun"
 	"github.com/lpmourato/c9s/internal/ui"
 )
 
 // CloudRunView represents the Cloud Run services view
 type CloudRunView struct {
 	*ui.Table
-	app          *ui.App
-	headerTable  *ui.HeaderTable
-	commandInput *ui.CommandInput
-	project      string
-	region       string
-	services     []model.Service // Store all services
-	filter       string          // Current service name filter
+	app             *ui.App
+	headerTable     *ui.HeaderTable
+	commandInput    *ui.CommandInput
+	config          *config.CloudRunConfig
+	serviceProvider cloudrun.ServiceProvider
+	services        []cloudrun.Service
+	filter          string // Current service name filter
 }
 
 // Verify CloudRunView implements CommandHandler interface
@@ -27,14 +28,20 @@ var _ ui.CommandHandler = (*CloudRunView)(nil)
 
 // HandleRegion implements CommandHandler
 func (v *CloudRunView) HandleRegion(region string) error {
-	v.region = region
+	v.config.Region = region
+	if err := v.loadServices(); err != nil {
+		return err
+	}
 	v.updateHeader()
 	return nil
 }
 
 // HandleProject implements CommandHandler
 func (v *CloudRunView) HandleProject(project string) error {
-	v.project = project
+	v.config.ProjectID = project
+	if err := v.loadServices(); err != nil {
+		return err
+	}
 	v.updateHeader()
 	return nil
 }
@@ -49,7 +56,7 @@ func (v *CloudRunView) HandleService(service string) error {
 	// Apply filter and update table
 	rowIndex := 1 // Skip header
 	for _, svc := range v.services {
-		if service == "" || strings.Contains(strings.ToLower(svc.GetName()), strings.ToLower(service)) {
+		if service == "" || strings.Contains(strings.ToLower(svc.Name), strings.ToLower(service)) {
 			v.updateServiceRow(rowIndex, svc)
 			rowIndex++
 		}
@@ -75,7 +82,7 @@ func (v *CloudRunView) HandleQuit() {
 }
 
 // NewCloudRunView returns a new Cloud Run view
-func NewCloudRunView(app *ui.App) *CloudRunView {
+func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, provider cloudrun.ServiceProvider) *CloudRunView {
 	table := ui.NewTable()
 	table.SetApp(app)
 	table.SetSelectable(true, false)
@@ -85,11 +92,11 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	headerTable.SetTitle(" Cloud Run Context ")
 
 	view := &CloudRunView{
-		Table:       table,
-		app:         app,
-		headerTable: headerTable,
-		project:     "dev-tla-cm",
-		region:      "europe-west4",
+		Table:           table,
+		app:             app,
+		headerTable:     headerTable,
+		config:          cfg,
+		serviceProvider: provider,
 	}
 
 	// Set up the table columns and style
@@ -135,49 +142,70 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	app.SetMainView(cmdContainer)
 	app.SetFocus(view)
 	view.updateHeader()
-	view.loadMockData()
+	if err := view.loadServices(); err != nil {
+		app.Stop()
+		return nil
+	}
 
 	return view
 }
 
-// loadMockData loads mock service data into the table
-func (v *CloudRunView) loadMockData() {
-	v.services = model.GetMockServices()
-	for i, svc := range v.services {
-		row := i + 1 // Skip header row
-		v.updateServiceRow(row, svc)
+// loadServices loads services from the provider
+func (v *CloudRunView) loadServices() error {
+	var err error
+	if v.config.Region != "" {
+		v.services, err = v.serviceProvider.GetServicesByRegion(v.config.Region)
+	} else {
+		v.services, err = v.serviceProvider.GetServices()
 	}
-	v.Select(1, 0) // Select first row
+	if err != nil {
+		return err
+	}
+
+	// Clear and reload table
+	v.Clear()
+	v.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
+
+	for i, svc := range v.services {
+		if v.filter == "" || strings.Contains(strings.ToLower(svc.Name), strings.ToLower(v.filter)) {
+			v.updateServiceRow(i+1, svc)
+		}
+	}
+
+	if len(v.services) > 0 {
+		v.Select(1, 0)
+	}
+	return nil
 }
 
 // updateServiceRow updates a single row in the table with service data
-func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
+func (v *CloudRunView) updateServiceRow(row int, svc cloudrun.Service) {
 	cells := []ui.TableCell{
 		{
-			Text:      svc.GetName(),
+			Text:      svc.Name,
 			Expansion: 1,
 		},
 		{
-			Text:      svc.GetRegion(),
+			Text:      svc.Region,
 			Expansion: 1,
 		},
 		{
-			Text:      svc.GetURL(),
+			Text:      svc.URL,
 			Expansion: 2,
 		},
 		{
-			Text:      svc.GetStatus(),
-			TextColor: ui.StatusColor(svc.GetStatus()),
+			Text:      svc.Status,
+			TextColor: ui.StatusColor(svc.Status),
 			Expansion: 1,
 		},
 		{
-			Text:      svc.GetLastDeploy().Format("2006-01-02 15:04:05"),
+			Text:      svc.LastDeploy.Format("2006-01-02 15:04:05"),
 			Expansion: 1,
 			Align:     tview.AlignRight,
 		},
 		{
-			Text:      svc.GetTraffic(),
-			TextColor: ui.TrafficColor(svc.GetTraffic()),
+			Text:      svc.Traffic,
+			TextColor: ui.TrafficColor(svc.Traffic),
 			Expansion: 2,
 		},
 	}
@@ -189,8 +217,8 @@ func (v *CloudRunView) updateHeader() {
 	v.headerTable.Clear()
 
 	// Left column: Project and Region info
-	v.headerTable.AddLabelValueRow(0, "Project ID", v.project)
-	v.headerTable.AddLabelValueRow(1, "Region", v.region)
+	v.headerTable.AddLabelValueRow(0, "Project ID", v.config.ProjectID)
+	v.headerTable.AddLabelValueRow(1, "Region", v.config.Region)
 
 	// Add separator
 	v.headerTable.AddSeparator(2, 3)

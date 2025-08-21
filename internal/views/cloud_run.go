@@ -84,72 +84,37 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 	headerTable := ui.NewHeaderTable()
 	headerTable.SetTitle(" Cloud Run Context ")
 
-	// Remove selection highlighting
-	headerTable.SetSelectedStyle(tcell.StyleDefault.
-		Background(tcell.ColorBlack).
-		Foreground(tcell.ColorWhite)) // Create main flex layout
-
-	flex := tview.NewFlex()
-	flex.SetDirection(tview.FlexRow)
-	flex.SetBackgroundColor(tcell.ColorDefault)
-
-	// Add components with more height for header
-	flex.AddItem(headerTable, 5, 0, false) // Header height for 2 rows + shortcuts
-	flex.AddItem(table, 0, 1, true)        // Table takes remaining space
-
-	// Create command input
-	cmdInput := ui.NewCommandInput(app, table)
-
 	view := &CloudRunView{
-		Table:        table,
-		app:          app,
-		headerTable:  headerTable,
-		commandInput: cmdInput,
-		project:      "dev-tla-cm",
-		region:       "europe-west4",
+		Table:       table,
+		app:         app,
+		headerTable: headerTable,
+		project:     "dev-tla-cm",
+		region:      "europe-west4",
 	}
 
-	// Set command handler
-	cmdInput.SetCommandHandler(view)
-
-	// Set up the table
+	// Set up the table columns and style
 	view.SetColumns([]string{"Name", "Region", "URL", "Status", "Last Deploy", "Traffic"})
 	view.SetSelectedStyle(tcell.StyleDefault.Background(tcell.ColorNavy))
 
-	// Update header immediately
-	view.updateHeader()
-
-	// Create flex layout
-	var mainFlex, commandFlex *tview.Flex
-
-	mainFlex = tview.NewFlex().
+	// Create main content flex (header + table)
+	mainFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(headerTable, 5, 0, false).
 		AddItem(table, 0, 1, true)
 
-	commandFlex = tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(mainFlex, 0, 1, true).
-		AddItem(view.commandInput, 1, 0, false)
+	// Create command container with keyboard handling
+	cmdContainer := ui.NewCommandContainer(app, mainFlex, view)
+	view.commandInput = cmdContainer.GetCommandInput()
 
-	// Set up input handlers at the root level
-	commandFlex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Shift+: is usually ':' character
-		if event.Key() == tcell.KeyRune {
-			// Check for ':' character (which is what Shift+: produces)
-			if event.Rune() == ':' {
-				if !cmdInput.IsVisible() {
-					cmdInput.Show()
-					return nil
-				}
-			}
-		}
-		// If command input is visible, let it handle the event
-		if cmdInput.IsVisible() {
+	// Set up additional keyboard shortcuts
+	originalHandler := cmdContainer.GetInputCapture()
+	cmdContainer.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Let command input handle its events first
+		if view.commandInput.IsVisible() {
 			return event
 		}
 
-		// Handle other keyboard shortcuts
+		// Handle view-specific shortcuts
 		switch event.Key() {
 		case tcell.KeyCtrlD:
 			view.showServiceDescription()
@@ -158,12 +123,18 @@ func NewCloudRunView(app *ui.App) *CloudRunView {
 			view.showLogs()
 			return nil
 		}
+
+		// Pass through other events to the default handler
+		if originalHandler != nil {
+			return originalHandler(event)
+		}
 		return event
 	})
 
-	// Set the command flex as the main view and give the table focus
-	app.SetMainView(commandFlex)
-	app.SetFocus(view) // Load mock data
+	// Set as main view and update
+	app.SetMainView(cmdContainer)
+	app.SetFocus(view)
+	view.updateHeader()
 	view.loadMockData()
 
 	return view

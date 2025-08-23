@@ -31,4 +31,5 @@ func (s *CloudRunService) GetTraffic() string       { return s.Traffic }
 type CloudRunProvider interface {
 	GetServices() ([]model.Service, error)
 	GetServicesByRegion(region string) ([]model.Service, error)
+	NewLogStreamer(serviceName, region string) (model.LogStreamer, error)
 }

@@ -255,7 +255,28 @@ func (v *CloudRunView) showLogs() {
 	serviceName := v.GetCell(row, 0).Text
 	region := v.GetCell(row, 1).Text
 
-	// Create and show the log view
-	logView := NewLogView(v.app, serviceName, region)
+	// Create the log view
+	logView, err := NewLogView(v.app, serviceName, region)
+	if err != nil {
+		// Show error in status bar
+		v.app.ShowError(fmt.Sprintf("Failed to open logs: %v", err))
+		return
+	}
+
+	// Configure log streamer
+	provider := v.dataSource.GetProvider()
+
+	// Create a new log streamer
+	streamer, err := provider.NewLogStreamer(serviceName, region)
+	if err != nil {
+		v.app.ShowError(fmt.Sprintf("Failed to create log streamer: %v", err))
+		return
+	}
+
+	// Start streaming
+	logView.SetStreamer(streamer)
+	go logView.StreamLogs()
+
+	// Switch to log view
 	v.app.SwitchToView(logView)
 }

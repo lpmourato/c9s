@@ -55,3 +55,9 @@ func (a *App) GetPages() *tview.Pages {
 func (a *App) Stop() {
 	a.Application.Stop()
 }
+
+// ShowError shows an error message
+func (a *App) ShowError(msg string) {
+	// For now, just print to stderr
+	println(msg)
+}

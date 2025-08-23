@@ -10,12 +10,14 @@ import (
 	run "google.golang.org/api/run/v1"
 
 	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/gcp"
 	"github.com/lpmourato/c9s/internal/model"
 )
 
 type gcpDataSource struct {
 	projectID string
 	client    *run.ProjectsLocationsServicesService
+	provider  cloudrun.CloudRunProvider
 }
 
 func newGCPDataSource(projectID string) (DataSource, error) {
@@ -30,9 +32,15 @@ func newGCPDataSource(projectID string) (DataSource, error) {
 	// Get the services service which we'll use for API calls
 	servicesService := run.NewProjectsLocationsServicesService(runService)
 
+	provider, err := gcp.NewServiceProvider(projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service provider: %v", err)
+	}
+
 	return &gcpDataSource{
 		projectID: projectID,
 		client:    servicesService,
+		provider:  provider,
 	}, nil
 }
 
@@ -63,6 +71,10 @@ func (ds *gcpDataSource) GetServices() ([]model.Service, error) {
 	}
 
 	return allServices, nil
+}
+
+func (ds *gcpDataSource) GetProvider() cloudrun.CloudRunProvider {
+	return ds.provider
 }
 
 func (ds *gcpDataSource) GetServicesByRegion(region string) ([]model.Service, error) {

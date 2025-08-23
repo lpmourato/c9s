@@ -1,13 +1,21 @@
 package datasource
 
-import "github.com/lpmourato/c9s/internal/model"
+import (
+	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/model"
+)
 
 type mockDataSource struct {
-	data []model.Service
+	data     []model.Service
+	provider cloudrun.CloudRunProvider
 }
 
 func newMockDataSource(data []model.Service) DataSource {
-	return &mockDataSource{data: data}
+	provider := &mockProvider{serviceName: "mock-service"}
+	return &mockDataSource{
+		data:     data,
+		provider: provider,
+	}
 }
 
 func (ds *mockDataSource) GetServices() ([]model.Service, error) {
@@ -26,4 +34,25 @@ func (ds *mockDataSource) GetServicesByRegion(region string) ([]model.Service, e
 		}
 	}
 	return filtered, nil
+}
+
+func (ds *mockDataSource) GetProvider() cloudrun.CloudRunProvider {
+	return ds.provider
+}
+
+// mockProvider implements cloudrun.CloudRunProvider for testing
+type mockProvider struct {
+	serviceName string
+}
+
+func (p *mockProvider) GetServices() ([]model.Service, error) {
+	return nil, nil
+}
+
+func (p *mockProvider) GetServicesByRegion(region string) ([]model.Service, error) {
+	return nil, nil
+}
+
+func (p *mockProvider) NewLogStreamer(serviceName, region string) (model.LogStreamer, error) {
+	return model.NewMockLogStreamer(serviceName), nil
 }

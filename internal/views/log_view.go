@@ -21,7 +21,7 @@ type LogView struct {
 	streamer    model.LogStreamer
 }
 
-func NewLogView(app *ui.App, serviceName, region string) *LogView {
+func NewLogView(app *ui.App, serviceName, region string) (*LogView, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	v := &LogView{
@@ -31,12 +31,17 @@ func NewLogView(app *ui.App, serviceName, region string) *LogView {
 		region:      region,
 		ctx:         ctx,
 		cancel:      cancel,
-		streamer:    model.NewMockLogStreamer(serviceName),
+		streamer:    model.NewMockLogStreamer(serviceName), // Will be set via SetStreamer
 	}
 
 	v.SetBorder(true)
 	v.SetTitle(fmt.Sprintf(" %s - %s ", serviceName, region))
 	v.SetTitleAlign(tview.AlignLeft)
+
+	// Show loading message
+	loadingMsg := fmt.Sprintf("[yellow]Loading logs from Cloud Run service: [white]%s[yellow] in region [white]%s[yellow]...\n\n",
+		serviceName, region)
+	fmt.Fprint(v, loadingMsg)
 
 	// Set up key bindings
 	v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -48,10 +53,17 @@ func NewLogView(app *ui.App, serviceName, region string) *LogView {
 		return event
 	})
 
-	// Start streaming logs
-	go v.streamLogs()
+	return v, nil
+}
 
-	return v
+// SetStreamer sets the log streamer
+func (v *LogView) SetStreamer(streamer model.LogStreamer) {
+	v.streamer = streamer
+}
+
+// StreamLogs starts streaming logs
+func (v *LogView) StreamLogs() {
+	v.streamLogs()
 }
 
 func (v *LogView) streamLogs() {
@@ -71,7 +83,7 @@ func (v *LogView) streamLogs() {
 				color = "[gray]"
 			}
 
-			timestamp := entry.Timestamp.Format("15:04:05.000")
+			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05.000")
 			fmt.Fprintf(v, "%s %s%s %s[white]\n",
 				timestamp,
 				color,

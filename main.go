@@ -6,7 +6,7 @@ import (
 
 	"github.com/lpmourato/c9s/internal/config"
 	"github.com/lpmourato/c9s/internal/datasource"
-	"github.com/lpmourato/c9s/internal/model"
+	"github.com/lpmourato/c9s/internal/mock"
 	"github.com/lpmourato/c9s/internal/ui"
 	"github.com/lpmourato/c9s/internal/views"
 )
@@ -31,7 +31,7 @@ func main() {
 	dsConfig := &datasource.Config{
 		ProjectID:  cfg.ProjectID,
 		Region:     cfg.Region,
-		MockedData: model.GetDefaultMockData(),
+		MockedData: mock.GetDefaultServices(),
 	}
 
 	if *testMode {

@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/mock"
 	"github.com/lpmourato/c9s/internal/model"
 )
 
@@ -54,5 +55,5 @@ func (p *mockProvider) GetServicesByRegion(region string) ([]model.Service, erro
 }
 
 func (p *mockProvider) NewLogStreamer(serviceName, region string) (model.LogStreamer, error) {
-	return model.NewMockLogStreamer(serviceName), nil
+	return mock.NewLogStreamer(serviceName), nil
 }

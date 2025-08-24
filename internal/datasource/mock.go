@@ -1,14 +1,13 @@
 package datasource
 
 import (
-	"github.com/lpmourato/c9s/internal/domain/cloudrun"
 	"github.com/lpmourato/c9s/internal/mock"
 	"github.com/lpmourato/c9s/internal/model"
 )
 
 type mockDataSource struct {
 	data     []model.Service
-	provider cloudrun.CloudRunProvider
+	provider model.CloudRunProvider
 }
 
 func newMockDataSource(data []model.Service) DataSource {
@@ -37,11 +36,11 @@ func (ds *mockDataSource) GetServicesByRegion(region string) ([]model.Service, e
 	return filtered, nil
 }
 
-func (ds *mockDataSource) GetProvider() cloudrun.CloudRunProvider {
+func (ds *mockDataSource) GetProvider() model.CloudRunProvider {
 	return ds.provider
 }
 
-// mockProvider implements cloudrun.CloudRunProvider for testing
+// mockProvider implements model.CloudRunProvider for testing
 type mockProvider struct {
 	serviceName string
 }

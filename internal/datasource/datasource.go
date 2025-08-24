@@ -3,7 +3,6 @@ package datasource
 import (
 	"fmt"
 
-	"github.com/lpmourato/c9s/internal/domain/cloudrun"
 	"github.com/lpmourato/c9s/internal/model"
 )
 
@@ -32,7 +31,7 @@ type DataSource interface {
 	// GetServicesByRegion returns services filtered by region
 	GetServicesByRegion(region string) ([]model.Service, error)
 	// GetProvider returns the cloud run provider
-	GetProvider() cloudrun.CloudRunProvider
+	GetProvider() model.CloudRunProvider
 }
 
 // Factory creates and returns a DataSource based on config
@@ -41,7 +40,7 @@ func Factory(cfg *Config) (DataSource, error) {
 	case Mock:
 		return newMockDataSource(cfg.MockedData), nil
 	case GCP:
-		return newGCPDataSource(cfg.ProjectID)
+		return newCloudRunDataSource(cfg.ProjectID)
 	default:
 		return nil, fmt.Errorf("unsupported data source type: %s", cfg.Type)
 	}

@@ -12,13 +12,13 @@ import (
 	"github.com/lpmourato/c9s/internal/model"
 )
 
-type gcpDataSource struct {
+type cloudRunDataSource struct {
 	projectID string
 	client    *run.ProjectsLocationsServicesService
-	provider  cloudrun.CloudRunProvider
+	provider  *cloudrun.Provider
 }
 
-func newGCPDataSource(projectID string) (DataSource, error) {
+func newCloudRunDataSource(projectID string) (DataSource, error) {
 	ctx := context.Background()
 
 	// Create Cloud Run client
@@ -30,19 +30,21 @@ func newGCPDataSource(projectID string) (DataSource, error) {
 	// Get the services service which we'll use for API calls
 	servicesService := run.NewProjectsLocationsServicesService(runService)
 
-	provider, err := gcp.NewServiceProvider(projectID)
+	baseProvider, err := gcp.NewServiceProvider(projectID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create service provider: %v", err)
 	}
 
-	return &gcpDataSource{
+	provider := cloudrun.NewProvider(baseProvider)
+
+	return &cloudRunDataSource{
 		projectID: projectID,
 		client:    servicesService,
 		provider:  provider,
 	}, nil
 }
 
-func (ds *gcpDataSource) GetServices() ([]model.Service, error) {
+func (ds *cloudRunDataSource) GetServices() ([]model.Service, error) {
 	if ds.projectID == "" {
 		return nil, fmt.Errorf("project ID is required")
 	}
@@ -74,11 +76,11 @@ func (ds *gcpDataSource) GetServices() ([]model.Service, error) {
 	return allServices, nil
 }
 
-func (ds *gcpDataSource) GetProvider() cloudrun.CloudRunProvider {
+func (ds *cloudRunDataSource) GetProvider() model.CloudRunProvider {
 	return ds.provider
 }
 
-func (ds *gcpDataSource) GetServicesByRegion(region string) ([]model.Service, error) {
+func (ds *cloudRunDataSource) GetServicesByRegion(region string) ([]model.Service, error) {
 	if ds.projectID == "" {
 		return nil, fmt.Errorf("project ID is required")
 	}
@@ -94,7 +96,7 @@ func (ds *gcpDataSource) GetServicesByRegion(region string) ([]model.Service, er
 
 	services := make([]model.Service, 0, len(resp.Items))
 	for _, svc := range resp.Items {
-		services = append(services, cloudrun.NewCloudRunServiceFromGCP(svc, region))
+		services = append(services, cloudrun.NewCloudRunGCPService(svc, region))
 	}
 
 	return services, nil

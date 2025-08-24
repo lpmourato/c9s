@@ -1,7 +1,6 @@
 package gcp
 
 import (
-	"github.com/lpmourato/c9s/internal/domain/cloudrun"
 	"github.com/lpmourato/c9s/internal/logging"
 	"github.com/lpmourato/c9s/internal/model"
 )
@@ -11,7 +10,7 @@ type serviceProvider struct {
 }
 
 // NewServiceProvider creates a new GCP service provider
-func NewServiceProvider(projectID string) (cloudrun.CloudRunProvider, error) {
+func NewServiceProvider(projectID string) (model.CloudRunProvider, error) {
 	return &serviceProvider{
 		projectID: projectID,
 	}, nil

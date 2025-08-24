@@ -61,7 +61,7 @@ func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, e
 	v.SetTitleAlign(tview.AlignLeft)
 
 	// Show loading message
-	loadingMsg := fmt.Sprintf("[yellow]Loading logs from Cloud Run service: [white]%s[yellow] in region [white]%s[yellow]...\n\n",
+	loadingMsg := fmt.Sprintf("Loading logs from %s in region %s...\n\n",
 		serviceName, region)
 	fmt.Fprint(v, loadingMsg)
 
@@ -93,23 +93,11 @@ func (v *LogView) streamLogs() {
 
 	for entry := range logChan {
 		v.app.QueueUpdateDraw(func() {
-			color := "[white]"
-			switch strings.ToUpper(entry.Severity) {
-			case "ERROR":
-				color = "[red]"
-			case "WARNING":
-				color = "[yellow]"
-			case "INFO":
-				color = "[white]"
-			case "DEBUG":
-				color = "[gray]"
-			}
-
 			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05.000")
-			fmt.Fprintf(v, "%s %s%s %s[white]\n",
+			level := strings.ToUpper(entry.Severity)
+			fmt.Fprintf(v, "%s %-7s %s\n",
 				timestamp,
-				color,
-				entry.Severity,
+				level,
 				entry.Message,
 			)
 

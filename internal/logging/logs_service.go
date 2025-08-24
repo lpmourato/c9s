@@ -16,21 +16,9 @@ const (
 	pollBackoffFactor   = 1.5
 )
 
-// LogProvider defines the interface that cloud providers must implement
-type LogProvider interface {
-	FetchLogs(ctx context.Context, filter string, pageSize int) ([]model.LogEntry, error)
-	BuildFilter(baseFilter string, timestamp time.Time) string
-}
-
-// TimeWindow represents a time window for fetching logs
-type TimeWindow struct {
-	Duration time.Duration
-	Desc     string
-}
-
 // LogService provides a generic implementation for log streaming
 type LogService struct {
-	provider LogProvider
+	provider model.LogProvider
 	opts     model.CloudProviderOptions
 
 	// Buffering and batching
@@ -45,17 +33,17 @@ type LogService struct {
 }
 
 // GetInitialTimeWindows returns the standard time windows for initial log fetching
-func (s *LogService) getInitialTimeWindows() []TimeWindow {
-	return []TimeWindow{
-		{10 * time.Minute, "last 10 minutes"},
-		{1 * time.Hour, "last hour"},
-		{24 * time.Hour, "last 24 hours"},
-		{0, "all time"},
+func (s *LogService) getInitialTimeWindows() []model.TimeWindow {
+	return []model.TimeWindow{
+		{Duration: 10 * time.Minute, Desc: "last 10 minutes"},
+		{Duration: 1 * time.Hour, Desc: "last hour"},
+		{Duration: 24 * time.Hour, Desc: "last 24 hours"},
+		{Duration: 0, Desc: "all time"},
 	}
 }
 
 // NewLogService creates a new log streaming service
-func NewLogService(provider LogProvider, opts model.CloudProviderOptions) model.LogStreamer {
+func NewLogService(provider model.LogProvider, opts model.CloudProviderOptions) model.LogStreamer {
 	return &LogService{
 		provider:     provider,
 		opts:         opts,
@@ -64,11 +52,6 @@ func NewLogService(provider LogProvider, opts model.CloudProviderOptions) model.
 		batchTimer:   time.NewTimer(defaultFlushTimeout),
 		pollInterval: minPollInterval,
 	}
-}
-
-// GetBaseFilter returns the base filter for the log provider
-func (s *LogService) GetBaseFilter() string {
-	return fmt.Sprintf(`resource.type="cloud_run_revision" resource.labels.service_name="%s"`, s.opts.ServiceName)
 }
 
 // flushBuffer sends buffered logs to the channel
@@ -116,11 +99,76 @@ func (s *LogService) adjustPollInterval(foundNewLogs bool) {
 	}
 }
 
+// addStatusMessage adds a status message to the log buffer
+func (s *LogService) addStatusMessage(ctx context.Context, ch chan<- model.LogEntry, severity, message string) bool {
+	statusMsg := model.LogEntry{
+		Timestamp: time.Now(),
+		Severity:  severity,
+		Message:   message,
+	}
+	return s.addToBuffer(ctx, ch, statusMsg)
+}
+
+// processLogs adds multiple log entries to the buffer and flushes if needed
+func (s *LogService) processLogs(ctx context.Context, ch chan<- model.LogEntry, logs []model.LogEntry) bool {
+	for _, entry := range logs {
+		if !s.addToBuffer(ctx, ch, entry) {
+			return false
+		}
+	}
+	return s.flushBuffer(ctx, ch)
+}
+
+// handleInitialLoad handles the initial loading of logs, trying different time windows
+func (s *LogService) handleInitialLoad(ctx context.Context, ch chan<- model.LogEntry, baseFilter string) (bool, error) {
+	timeWindows := s.getInitialTimeWindows()
+
+	for _, window := range timeWindows {
+		if !s.addStatusMessage(ctx, ch, "INFO", fmt.Sprintf("Initial load: searching for logs from %s...", window.Desc)) {
+			return false, nil
+		}
+
+		logs, err := s.fetchLogs(ctx, baseFilter, window.Duration, true)
+		if err != nil {
+			continue
+		}
+		if len(logs) > 0 {
+			if !s.processLogs(ctx, ch, logs) {
+				return false, nil
+			}
+			return true, nil
+		}
+	}
+
+	if !s.addStatusMessage(ctx, ch, "WARNING", "No logs found for this service") {
+		return false, nil
+	}
+	return false, nil
+}
+
+// handleIncrementalUpdate handles fetching and processing new logs
+func (s *LogService) handleIncrementalUpdate(ctx context.Context, ch chan<- model.LogEntry, baseFilter string) (bool, error) {
+	logs, err := s.fetchLogs(ctx, baseFilter, 0, false)
+	if err != nil {
+		if !s.addStatusMessage(ctx, ch, "ERROR", fmt.Sprintf("Error fetching logs: %v", err)) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if len(logs) > 0 {
+		if !s.processLogs(ctx, ch, logs) {
+			return false, nil
+		}
+	}
+
+	return len(logs) > 0, nil
+}
+
 // StreamLogs implements model.LogStreamer interface
 func (s *LogService) StreamLogs(ctx context.Context) chan model.LogEntry {
 	ch := make(chan model.LogEntry, defaultBatchSize)
 	flushTicker := time.NewTicker(s.flushTimeout)
-	// Ensure we use minPollInterval for initial polling
 	s.pollInterval = minPollInterval
 	pollTicker := time.NewTicker(s.pollInterval)
 
@@ -129,12 +177,11 @@ func (s *LogService) StreamLogs(ctx context.Context) chan model.LogEntry {
 		defer flushTicker.Stop()
 		defer pollTicker.Stop()
 
-		baseFilter := fmt.Sprintf(`resource.type="cloud_run_revision" resource.labels.service_name="%s"`, s.opts.ServiceName)
+		baseFilter := s.provider.GetBaseFilter(s.opts.ServiceName)
 
 		for {
 			select {
 			case <-ctx.Done():
-				// Final flush before exiting
 				s.flushBuffer(ctx, ch)
 				return
 			case <-flushTicker.C:
@@ -142,93 +189,20 @@ func (s *LogService) StreamLogs(ctx context.Context) chan model.LogEntry {
 					return
 				}
 			case <-pollTicker.C:
-				//var filter string
-				var statusMsg model.LogEntry
-
 				if !s.initialized {
-					// Initial load - try different time windows until we find logs
-					foundInitialLogs := false
-					timeWindows := s.getInitialTimeWindows()
-
-					for _, window := range timeWindows {
-						statusMsg = model.LogEntry{
-							Timestamp: time.Now(),
-							Severity:  "INFO",
-							Message:   fmt.Sprintf("Initial load: searching for logs from %s...", window.Desc),
-						}
-						if !s.addToBuffer(ctx, ch, statusMsg) {
-							return
-						}
-
-						// Get initial logs
-						logs, err := s.fetchLogs(ctx, baseFilter, window.Duration, true)
-						if err != nil {
-							continue
-						}
-						if len(logs) > 0 {
-							foundInitialLogs = true
-							// Add the logs to the buffer
-							for _, entry := range logs {
-								if !s.addToBuffer(ctx, ch, entry) {
-									return
-								}
-							}
-							if !s.flushBuffer(ctx, ch) {
-								return
-							}
-							break
-						}
-					}
-
-					if !foundInitialLogs {
-						statusMsg = model.LogEntry{
-							Timestamp: time.Now(),
-							Severity:  "WARNING",
-							Message:   "No logs found for this service",
-						}
-						if !s.addToBuffer(ctx, ch, statusMsg) {
-							return
-						}
-						if !s.flushBuffer(ctx, ch) {
-							return
-						}
+					foundLogs, err := s.handleInitialLoad(ctx, ch, baseFilter)
+					if err != nil || !foundLogs {
 						continue
 					}
 
 					s.initialized = true
-					// Set initial timestamp if not set
 					if s.lastTimestamp.IsZero() {
-						s.lastTimestamp = time.Now().Add(-time.Second) // Start from 1 second ago
-					}
-				}
-
-				// Incremental updates - fetch only new logs
-				logs, err := s.fetchLogs(ctx, baseFilter, 0, false)
-				if err != nil {
-					statusMsg = model.LogEntry{
-						Timestamp: time.Now(),
-						Severity:  "ERROR",
-						Message:   fmt.Sprintf("Error fetching logs: %v", err),
-					}
-					if !s.addToBuffer(ctx, ch, statusMsg) {
-						return
+						s.lastTimestamp = time.Now().Add(-time.Second)
 					}
 					continue
 				}
 
-				// Process any new logs
-				if len(logs) > 0 {
-					for _, entry := range logs {
-						if !s.addToBuffer(ctx, ch, entry) {
-							return
-						}
-					}
-					if !s.flushBuffer(ctx, ch) {
-						return
-					}
-				}
-
-				foundNewLogs := len(logs) > 0
+				foundNewLogs, _ := s.handleIncrementalUpdate(ctx, ch, baseFilter)
 				s.adjustPollInterval(foundNewLogs)
 				pollTicker.Reset(s.pollInterval)
 			}

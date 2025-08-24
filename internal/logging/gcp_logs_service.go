@@ -18,7 +18,7 @@ type GCPLogProvider struct {
 }
 
 // NewGCPLogService creates a new log streaming service for GCP Cloud Run
-func NewGCPLogService(projectID, serviceName, region string) (LogProvider, error) {
+func NewGCPLogService(projectID, serviceName, region string) (model.LogProvider, error) {
 	// Initialize GCP client
 	ctx := context.Background()
 	client, err := logging.NewClient(ctx)
@@ -79,6 +79,12 @@ func (p *GCPLogProvider) BuildFilter(baseFilter string, timestamp time.Time) str
 		return baseFilter
 	}
 	return fmt.Sprintf(`%s AND timestamp >= "%s"`, baseFilter, timestamp.Format(time.RFC3339Nano))
+}
+
+// GetBaseFilter implements LogProvider.GetBaseFilter
+// Returns GCP Cloud Run specific filter format
+func (p *GCPLogProvider) GetBaseFilter(serviceName string) string {
+	return fmt.Sprintf(`resource.type="cloud_run_revision" resource.labels.service_name="%s"`, serviceName)
 }
 
 // Close closes the GCP logging client

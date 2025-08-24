@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"github.com/lpmourato/c9s/internal/domain/cloudrun"
+	"github.com/lpmourato/c9s/internal/logging"
 	"github.com/lpmourato/c9s/internal/model"
 )
 
@@ -28,5 +29,16 @@ func (p *serviceProvider) GetServicesByRegion(region string) ([]model.Service, e
 
 // NewLogStreamer creates a log streamer for a Cloud Run service
 func (p *serviceProvider) NewLogStreamer(serviceName, region string) (model.LogStreamer, error) {
-	return NewCloudRunLogStreamer(p.projectID, serviceName, region)
+	provider, err := logging.NewGCPLogService(p.projectID, serviceName, region)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := model.CloudProviderOptions{
+		ProjectID:   p.projectID,
+		ServiceName: serviceName,
+		Region:      region,
+	}
+
+	return logging.NewLogService(provider, opts), nil
 }

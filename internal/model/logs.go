@@ -18,6 +18,13 @@ type LogStreamer interface {
 	StreamLogs(ctx context.Context) chan LogEntry
 }
 
+// CloudProviderOptions contains configuration for cloud provider log streaming
+type CloudProviderOptions struct {
+	ProjectID   string
+	ServiceName string
+	Region      string
+}
+
 // MockLogStreamer implements LogStreamer for testing
 type MockLogStreamer struct {
 	serviceName string

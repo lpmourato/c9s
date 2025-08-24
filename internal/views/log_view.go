@@ -7,6 +7,7 @@ import (
 
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
+	"github.com/lpmourato/c9s/internal/logging"
 	"github.com/lpmourato/c9s/internal/model"
 	"github.com/lpmourato/c9s/internal/ui"
 )
@@ -21,8 +22,21 @@ type LogView struct {
 	streamer    model.LogStreamer
 }
 
-func NewLogView(app *ui.App, serviceName, region string) (*LogView, error) {
+func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	provider, err := logging.NewGCPLogService(projectID, serviceName, region)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create log streamer: %v", err)
+	}
+
+	opts := model.CloudProviderOptions{
+		ProjectID:   projectID,
+		ServiceName: serviceName,
+		Region:      region,
+	}
+
+	streamer := logging.NewLogService(provider, opts)
 
 	v := &LogView{
 		TextView:    tview.NewTextView().SetDynamicColors(true),
@@ -31,7 +45,7 @@ func NewLogView(app *ui.App, serviceName, region string) (*LogView, error) {
 		region:      region,
 		ctx:         ctx,
 		cancel:      cancel,
-		streamer:    model.NewMockLogStreamer(serviceName), // Will be set via SetStreamer
+		streamer:    streamer,
 	}
 
 	v.SetBorder(true)

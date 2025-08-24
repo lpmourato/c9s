@@ -7,14 +7,14 @@ import (
 
 	"github.com/derailed/tcell/v2"
 	"github.com/derailed/tview"
+	"github.com/lpmourato/c9s/internal/interfaces"
 	"github.com/lpmourato/c9s/internal/logging"
 	"github.com/lpmourato/c9s/internal/model"
-	"github.com/lpmourato/c9s/internal/ui"
 )
 
 type LogView struct {
 	*tview.TextView
-	app         *ui.App
+	app         interfaces.UIController
 	serviceName string
 	region      string
 	ctx         context.Context
@@ -22,21 +22,64 @@ type LogView struct {
 	streamer    model.LogStreamer
 }
 
-func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Ensure cancel is called on error paths
-	var v *LogView
-	defer func() {
-		if v == nil {
-			cancel()
-		}
-	}()
-
+func NewLogView(app interfaces.UIController, projectID, serviceName, region string) (*LogView, error) {
 	provider, err := logging.NewGCPLogService(projectID, serviceName, region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log streamer: %v", err)
 	}
+
+	return NewLogViewWithProvider(app, provider, projectID, serviceName, region)
+}
+
+// NewMockLogView creates a new log view with mock data for testing
+func NewMockLogView(app interfaces.UIController, serviceName, region string) *LogView {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Create mock provider
+	mockProvider := &model.MockLogProvider{ServiceName: serviceName}
+
+	opts := model.CloudProviderOptions{
+		ServiceName: serviceName,
+		Region:      region,
+	}
+
+	streamer := logging.NewLogService(mockProvider, opts)
+
+	v := &LogView{
+		TextView:    tview.NewTextView().SetDynamicColors(true),
+		app:         app,
+		serviceName: serviceName,
+		region:      region,
+		ctx:         ctx,
+		cancel:      cancel,
+		streamer:    streamer,
+	}
+
+	v.SetBorder(true)
+	v.SetTitle(fmt.Sprintf(" %s - %s (MOCK) ", serviceName, region))
+	v.SetTitleAlign(tview.AlignLeft)
+
+	// Show loading message (for mock view)
+	loadingMsg := fmt.Sprintf("[gray]Starting mock log stream for [yellow::b]%s[gray]...\n\n",
+		serviceName)
+	fmt.Fprint(v, loadingMsg)
+
+	// Set up key bindings
+	v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape {
+			v.cancel()         // Stop log streaming
+			app.ReturnToMain() // Always return to main view
+			return nil
+		}
+		return event
+	})
+
+	return v
+}
+
+// NewLogViewWithProvider creates a new log view with the specified provider
+func NewLogViewWithProvider(app interfaces.UIController, provider model.LogProvider, projectID, serviceName, region string) (*LogView, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 
 	opts := model.CloudProviderOptions{
 		ProjectID:   projectID,
@@ -46,7 +89,7 @@ func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, e
 
 	streamer := logging.NewLogService(provider, opts)
 
-	v = &LogView{
+	v := &LogView{
 		TextView:    tview.NewTextView().SetDynamicColors(true),
 		app:         app,
 		serviceName: serviceName,
@@ -61,7 +104,7 @@ func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, e
 	v.SetTitleAlign(tview.AlignLeft)
 
 	// Show loading message
-	loadingMsg := fmt.Sprintf("Loading logs from %s in region %s...\n\n",
+	loadingMsg := fmt.Sprintf("[gray]Loading logs from [yellow::b]%s[gray] in region [yellow::b]%s[gray]...\n\n",
 		serviceName, region)
 	fmt.Fprint(v, loadingMsg)
 
@@ -92,14 +135,63 @@ func (v *LogView) streamLogs() {
 	logChan := v.streamer.StreamLogs(v.ctx)
 
 	for entry := range logChan {
+		entry := entry // capture for goroutine
 		v.app.QueueUpdateDraw(func() {
 			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05.000")
-			level := strings.ToUpper(entry.Severity)
-			fmt.Fprintf(v, "%s %-7s %s\n",
+			message := entry.Message
+
+			// Parse level from the message content when severity is DEFAULT
+			level := "INFO" // default level
+			message = strings.TrimSpace(message)
+
+			// Check for common log level patterns in the message
+			switch {
+			case strings.Contains(message, "ERROR"):
+				level = "ERROR"
+			case strings.Contains(message, "WARN") || strings.Contains(message, "WARNING"):
+				level = "WARN"
+			case strings.Contains(message, "INFO"):
+				level = "INFO"
+			case strings.Contains(message, "DEBUG"):
+				level = "DEBUG"
+			case strings.Contains(message, "TRACE"):
+				level = "TRACE"
+			}
+
+			message = strings.TrimSpace(message)
+
+			// K9s-style coloring
+			var levelColor string
+
+			// Apply coloring based on level
+			switch level {
+			case "ERROR", "CRITICAL", "FATAL":
+				levelColor = "[red::b]"
+			case "WARN":
+				levelColor = "[yellow::b]"
+			case "INFO":
+				levelColor = "[green::b]"
+			case "DEBUG":
+				levelColor = "[gray::b]"
+			case "TRACE":
+				levelColor = "[blue::b]"
+			default:
+				levelColor = "[green::b]" // Use INFO color for any unrecognized level
+			}
+
+			// Escape any existing color codes in the message
+			message = strings.ReplaceAll(message, "[", "[[")
+
+			// Format: gray timestamp, bold colored level, white message
+			logLine := fmt.Sprintf("[gray]%s[-:-:-] %s%-7s[-:-:-] [white]%s[-:-:-]\n",
 				timestamp,
+				levelColor,
 				level,
-				entry.Message,
+				message,
 			)
+
+			// Use Write directly to update TextView
+			fmt.Fprintf(v, "%s", logLine)
 
 			// Auto-scroll to bottom
 			v.ScrollToEnd()

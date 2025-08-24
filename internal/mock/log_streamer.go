@@ -24,16 +24,60 @@ func NewLogStreamer(serviceName string) *LogStreamer {
 // StreamLogs implements model.LogStreamer interface for testing purposes
 func (m *LogStreamer) StreamLogs(ctx context.Context) chan model.LogEntry {
 	ch := make(chan model.LogEntry)
-	severities := []string{"INFO", "WARNING", "ERROR", "DEBUG"}
-	messages := []string{
-		"Request processed successfully",
-		"Connection attempt failed",
-		"Cache hit ratio: 85%%",
-		"Memory usage: %dMB",
-		"Processing request from %s",
-		"Response time: %dms",
-		"Background task completed",
-		"Starting scheduled job",
+	// Test different log levels
+	logTypes := []struct {
+		severity string
+		messages []string
+	}{
+		{
+			severity: "ERROR",
+			messages: []string{
+				"Failed to connect to database",
+				"Invalid configuration detected",
+				"Service crashed unexpectedly",
+			},
+		},
+		{
+			severity: "WARNING",
+			messages: []string{
+				"High memory usage detected",
+				"Retrying failed request",
+				"ERROR: Operation completed with warnings", // WARNING log containing ERROR
+			},
+		},
+		{
+			severity: "WARN",
+			messages: []string{
+				"Database connection slow",
+				"Low disk space detected",
+				"ERROR: Task completed with warnings", // WARN log containing ERROR
+			},
+		},
+
+		{
+			severity: "INFO",
+			messages: []string{
+				"Service started successfully",
+				"Request processed",
+				"Cache refreshed",
+			},
+		},
+		{
+			severity: "DEBUG",
+			messages: []string{
+				"Connection pool stats: active=5",
+				"Cache hit ratio: 85%",
+				"Request headers received",
+			},
+		},
+		{
+			severity: "", // Empty severity in GCP is equivalent to INFO
+			messages: []string{
+				"System status check completed",
+				"Routine maintenance running",
+				"Backup completed successfully",
+			},
+		},
 	}
 
 	go func() {
@@ -44,25 +88,15 @@ func (m *LogStreamer) StreamLogs(ctx context.Context) chan model.LogEntry {
 			case <-ctx.Done():
 				return
 			case <-time.After(time.Millisecond * time.Duration(500+rand.Intn(1500))):
-				severity := severities[rand.Intn(len(severities))]
-				msgTemplate := messages[rand.Intn(len(messages))]
-				var msg string
+				// Select a random log type
+				logType := logTypes[rand.Intn(len(logTypes))]
 
-				switch msgTemplate {
-				case "Memory usage: %dMB":
-					msg = fmt.Sprintf(msgTemplate, 100+rand.Intn(900))
-				case "Processing request from %s":
-					regions := []string{"us-east", "eu-west", "ap-east"}
-					msg = fmt.Sprintf(msgTemplate, regions[rand.Intn(len(regions))])
-				case "Response time: %dms":
-					msg = fmt.Sprintf(msgTemplate, 10+rand.Intn(990))
-				default:
-					msg = msgTemplate
-				}
+				// Select a random message for this severity
+				msg := logType.messages[rand.Intn(len(logType.messages))]
 
 				entry := model.LogEntry{
 					Timestamp: time.Now(),
-					Severity:  severity,
+					Severity:  logType.severity,
 					Message:   fmt.Sprintf("[%s] %s", m.serviceName, msg),
 				}
 

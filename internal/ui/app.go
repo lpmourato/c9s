@@ -2,7 +2,11 @@ package ui
 
 import (
 	"github.com/derailed/tview"
+	"github.com/lpmourato/c9s/internal/interfaces"
 )
+
+// Ensure App implements UIController
+var _ interfaces.UIController = (*App)(nil)
 
 // App represents the application
 type App struct {
@@ -60,4 +64,9 @@ func (a *App) Stop() {
 func (a *App) ShowError(msg string) {
 	// For now, just print to stderr
 	println(msg)
+}
+
+// QueueUpdateDraw wraps the tview QueueUpdateDraw to match the UIController interface
+func (a *App) QueueUpdateDraw(f func()) {
+	a.Application.QueueUpdateDraw(f)
 }

@@ -25,6 +25,14 @@ type LogView struct {
 func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Ensure cancel is called on error paths
+	var v *LogView
+	defer func() {
+		if v == nil {
+			cancel()
+		}
+	}()
+
 	provider, err := logging.NewGCPLogService(projectID, serviceName, region)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log streamer: %v", err)
@@ -38,7 +46,7 @@ func NewLogView(app *ui.App, projectID, serviceName, region string) (*LogView, e
 
 	streamer := logging.NewLogService(provider, opts)
 
-	v := &LogView{
+	v = &LogView{
 		TextView:    tview.NewTextView().SetDynamicColors(true),
 		app:         app,
 		serviceName: serviceName,

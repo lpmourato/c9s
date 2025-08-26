@@ -3,6 +3,7 @@ package logging
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/lpmourato/c9s/internal/model"
@@ -11,7 +12,8 @@ import (
 const (
 	defaultFlushTimeout = 500 * time.Millisecond
 	defaultBatchSize    = 100
-	minPollInterval     = 2 * time.Second
+	maxLogEntries       = 100
+	minPollInterval     = 3 * time.Second
 	maxPollInterval     = 30 * time.Second
 	pollBackoffFactor   = 1.5
 )
@@ -233,6 +235,7 @@ func (s *LogService) fetchLogs(ctx context.Context, baseFilter string, duration 
 	var latestTimestamp time.Time
 	var filteredLogs []model.LogEntry
 
+	// First collect all valid logs
 	for _, log := range logs {
 		// Track the latest timestamp seen
 		if latestTimestamp.IsZero() || log.Timestamp.After(latestTimestamp) {
@@ -245,6 +248,16 @@ func (s *LogService) fetchLogs(ctx context.Context, baseFilter string, duration 
 		}
 
 		filteredLogs = append(filteredLogs, log)
+	}
+
+	// Sort logs by timestamp in descending order (most recent first)
+	sort.Slice(filteredLogs, func(i, j int) bool {
+		return filteredLogs[i].Timestamp.After(filteredLogs[j].Timestamp)
+	})
+
+	// Take only the most recent logs up to maxLogEntries
+	if len(filteredLogs) > maxLogEntries {
+		filteredLogs = filteredLogs[:maxLogEntries]
 	}
 
 	// Update the last timestamp if we found logs

@@ -60,7 +60,7 @@ func NewMockLogView(app interfaces.UIController, serviceName, region string) *Lo
 	v.SetTitleAlign(tview.AlignLeft)
 
 	// Show loading message (for mock view)
-	loadingMsg := fmt.Sprintf("[gray]Starting mock log stream for [yellow::b]%s[gray]...\n\n",
+	loadingMsg := fmt.Sprintf("[gray::b]Starting mock log stream for [yellow::b]%s[gray::b]...\n\n",
 		serviceName)
 	fmt.Fprint(v, loadingMsg)
 
@@ -104,7 +104,7 @@ func NewLogViewWithProvider(app interfaces.UIController, provider model.LogProvi
 	v.SetTitleAlign(tview.AlignLeft)
 
 	// Show loading message
-	loadingMsg := fmt.Sprintf("[gray]Loading logs from [yellow::b]%s[gray] in region [yellow::b]%s[gray]...\n\n",
+	loadingMsg := fmt.Sprintf("[gray::b]Loading logs from [yellow::b]%s[gray::b] in region [yellow::b]%s[gray::b]...\n\n",
 		serviceName, region)
 	fmt.Fprint(v, loadingMsg)
 
@@ -183,7 +183,7 @@ func (v *LogView) streamLogs() {
 			message = strings.ReplaceAll(message, "[", "[[")
 
 			// Format: gray timestamp, bold colored level, white message
-			logLine := fmt.Sprintf("[gray]%s[-:-:-] %s%-7s[-:-:-] [white]%s[-:-:-]\n",
+			logLine := fmt.Sprintf("[gray::b]%s[-:-:-] %s%-7s[-:-:-] [white::b]%s[-:-:-]\n",
 				timestamp,
 				levelColor,
 				level,

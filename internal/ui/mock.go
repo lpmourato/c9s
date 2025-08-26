@@ -85,7 +85,7 @@ func NewMockLogView(app interfaces.UIController, serviceName, region string) tvi
 				message := strings.ReplaceAll(entry.Message, "[", "[[")
 
 				// Format: gray timestamp, bold colored level, white message
-				logLine := fmt.Sprintf("[gray]%s[-:-:-] %s%-7s[-:-:-] [white]%s[-:-:-]\n",
+				logLine := fmt.Sprintf("[gray]%s[-:-:-] %s%-7s[-:-:-] [white::b]%s[-:-:-]\n",
 					timestamp,
 					levelColor,
 					level,

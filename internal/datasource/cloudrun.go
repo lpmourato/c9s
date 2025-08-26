@@ -101,3 +101,18 @@ func (ds *cloudRunDataSource) GetServicesByRegion(region string) ([]model.Servic
 
 	return services, nil
 }
+
+func (ds *cloudRunDataSource) GetServiceDetails(name, region string) (*model.ServiceDetails, error) {
+	if ds.projectID == "" {
+		return nil, fmt.Errorf("project ID is required")
+	}
+	if region == "" {
+		return nil, fmt.Errorf("region is required")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("service name is required")
+	}
+
+	ctx := context.Background()
+	return ds.provider.GetServiceDetails(ctx, name, region)
+}

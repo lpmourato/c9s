@@ -43,6 +43,11 @@ func (ds *mockDataSource) GetProvider() model.CloudRunProvider {
 	return ds.provider
 }
 
+func (ds *mockDataSource) GetServiceDetails(name, region string) (*model.ServiceDetails, error) {
+	ctx := context.Background()
+	return ds.provider.GetServiceDetails(ctx, name, region)
+}
+
 // mockProvider implements model.CloudRunProvider for testing
 type mockProvider struct {
 	serviceName string

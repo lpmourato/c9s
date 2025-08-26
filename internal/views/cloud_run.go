@@ -124,12 +124,18 @@ func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, ds datasource.Data
 
 		// Handle view-specific shortcuts
 		switch event.Key() {
-		case tcell.KeyCtrlD:
-			view.showServiceDescription()
-			return nil
 		case tcell.KeyEnter:
 			view.showLogs()
 			return nil
+		case tcell.KeyRune:
+			if event.Rune() == 'd' || event.Rune() == 'D' {
+				view.showDeploymentDetails()
+				return nil
+			}
+			if event.Rune() == 's' || event.Rune() == 'S' {
+				view.showServiceDescription()
+				return nil
+			}
 		}
 
 		// Pass through other events to the default handler
@@ -225,7 +231,7 @@ func (v *CloudRunView) updateHeader() {
 	v.headerTable.AddSeparator(2, 3)
 
 	// Right column: Shortcuts and Commands
-	v.headerTable.AddSection(0, 3, "Keyboard Shortcuts", "Enter(Logs) Ctrl+D(Description)")
+	v.headerTable.AddSection(0, 3, "Keyboard Shortcuts", "Enter(Logs), D(Service Details)")
 	v.headerTable.AddSection(1, 3, "Commands", ":region(rg) :project(proj) :service(svc) :clear(cl) :quit(q)")
 
 	// Command input/hint row
@@ -268,4 +274,24 @@ func (v *CloudRunView) showLogs() {
 
 	// Switch to log view
 	v.app.SwitchToView(logView)
+}
+
+// showDeploymentDetails displays deployment details for the selected service
+func (v *CloudRunView) showDeploymentDetails() {
+	row, _ := v.GetSelection()
+	if row == 0 {
+		return // Header row
+	}
+
+	serviceName := v.GetCell(row, 0).Text
+	region := v.GetCell(row, 1).Text
+
+	// Create deployment view
+	deployView := NewDeploymentView(v.app, serviceName, region)
+
+	// Start loading details using the provider from the data source
+	deployView.LoadDetails(v.dataSource.GetProvider())
+
+	// Switch to deployment view
+	v.app.SwitchToView(deployView)
 }

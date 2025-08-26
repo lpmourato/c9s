@@ -32,6 +32,8 @@ type DataSource interface {
 	GetServicesByRegion(region string) ([]model.Service, error)
 	// GetProvider returns the cloud run provider
 	GetProvider() model.CloudRunProvider
+	// GetServiceDetails returns detailed information about a specific service
+	GetServiceDetails(name, region string) (*model.ServiceDetails, error)
 }
 
 // Factory creates and returns a DataSource based on config

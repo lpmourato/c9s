@@ -1,6 +1,8 @@
 package cloudrun
 
 import (
+	"context"
+
 	"github.com/lpmourato/c9s/internal/model"
 )
 
@@ -29,4 +31,9 @@ func (p *Provider) GetServicesByRegion(region string) ([]model.Service, error) {
 // NewLogStreamer implements CloudRunProvider
 func (p *Provider) NewLogStreamer(serviceName, region string) (model.LogStreamer, error) {
 	return p.delegate.NewLogStreamer(serviceName, region)
+}
+
+// GetServiceDetails implements CloudRunProvider
+func (p *Provider) GetServiceDetails(ctx context.Context, serviceName, region string) (*model.ServiceDetails, error) {
+	return p.delegate.GetServiceDetails(ctx, serviceName, region)
 }

@@ -1,6 +1,9 @@
 package datasource
 
 import (
+	"context"
+	"time"
+
 	"github.com/lpmourato/c9s/internal/mock"
 	"github.com/lpmourato/c9s/internal/model"
 )
@@ -55,4 +58,33 @@ func (p *mockProvider) GetServicesByRegion(region string) ([]model.Service, erro
 
 func (p *mockProvider) NewLogStreamer(serviceName, region string) (model.LogStreamer, error) {
 	return mock.NewLogStreamer(serviceName), nil
+}
+
+func (p *mockProvider) GetServiceDetails(ctx context.Context, serviceName, region string) (*model.ServiceDetails, error) {
+	return &model.ServiceDetails{
+		Name:           serviceName,
+		Region:         region,
+		URL:            "https://" + serviceName + ".run.app",
+		LastUpdated:    time.Now(),
+		ContainerImage: "gcr.io/mock/image:latest",
+		CPU:            "1000m",
+		Memory:         "512Mi",
+		Port:           8080,
+		EnvVars: map[string]string{
+			"ENV":     "mock",
+			"VERSION": "1.0.0",
+		},
+		MinInstances:   0,
+		MaxInstances:   10,
+		Ready:          true,
+		ActiveRevision: serviceName + "-00001",
+		Traffic: []model.RevisionTraffic{
+			{
+				RevisionName: serviceName + "-00001",
+				Percent:      100,
+				Tag:          "",
+				Latest:       true,
+			},
+		},
+	}, nil
 }

@@ -111,7 +111,7 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 		if len(details.Labels) > 0 {
 			v.writeKeyValue("Labels", "")
 			for k, val := range details.Labels {
-				fmt.Fprintf(v, "  [dim]%s[-]: [silver]%s\n", k, val)
+				v.writeIndentedLine(1, "[dim::]%s: [silver::]%s", k, val)
 			}
 		}
 		v.writeLine("")
@@ -186,10 +186,10 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 		for _, t := range details.Traffic {
 			status := ""
 			if t.Latest {
-				status = " [green::](latest)[-]"
+				status = " [green::](latest)"
 			}
 			if t.Tag != "" {
-				status += fmt.Sprintf(" [blue::](%s)[-]", t.Tag)
+				status += fmt.Sprintf(" [blue::](%s)", t.Tag)
 			}
 			v.writeKeyValue("Revision "+t.RevisionName, fmt.Sprintf("%d%%%s", t.Percent, status))
 		}
@@ -213,11 +213,11 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 		if len(details.ContainerStatuses) > 0 {
 			v.writeKeyValue("Container Statuses", "")
 			for _, cs := range details.ContainerStatuses {
-				status := "[red]Not Ready[-]"
+				status := "[red]Not Ready"
 				if cs.Ready {
-					status = "[green]Ready[-]"
+					status = "[green::]Ready"
 				}
-				fmt.Fprintf(v, "  [dim]%s[-]: %s (restarts: %d)\n", cs.Name, status, cs.RestartCount)
+				v.writeIndentedLine(1, "[dim::]%s: %s (restarts: %d)", cs.Name, status, cs.RestartCount)
 			}
 		}
 		v.writeLine("")
@@ -243,10 +243,12 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 		if len(details.Secrets) > 0 {
 			v.writeKeyValue("Secrets", "")
 			for _, secret := range details.Secrets {
-				fmt.Fprintf(v, "  [dim]%s[-] → [silver]%s\n", secret.Name, secret.MountPath)
-				for _, item := range secret.Items {
-					fmt.Fprintf(v, "    [dim]%s[-] → [silver]%s\n", item.Key, item.Path)
-				}
+				v.writeIndentedLine(1, "	[dim::]%s[silver::]%s", secret.Name, secret.MountPath)
+				// TODO: no need for extra loop for instance
+				// for _, item := range secret.Items {
+				// 	fmt.Fprintf(v, "%s as [silver::]%s", item.Key, item.Path)
+				// 	v.writeIndentedLine(1, "	[dim::]%s:[silver::]%s", item.Key, item.Path)
+				// }
 			}
 		}
 
@@ -255,9 +257,10 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 			for _, vol := range details.Volumes {
 				readOnlyText := ""
 				if vol.ReadOnly {
-					readOnlyText = " [dim](read-only)[-]"
+					readOnlyText = " [dim::](read-only)"
 				}
-				fmt.Fprintf(v, "  [dim]%s[-] (%s) → [silver]%s%s\n", vol.Name, vol.VolumeType, vol.MountPath, readOnlyText)
+				// TODO: check missing info
+				v.writeIndentedLine(1, "	[dim::]%s (%s):[silver::]%s%s", vol.Name, vol.VolumeType, vol.MountPath, readOnlyText)
 			}
 		}
 		v.writeLine("")
@@ -267,13 +270,13 @@ func (v *DeploymentView) displayDetails(details *model.ServiceDetails) {
 	if len(details.RevisionConditions) > 0 {
 		v.writeSectionHeader("Service Conditions")
 		for _, cond := range details.RevisionConditions {
-			status := "[red]" + cond.Status + "[-]"
+			status := "[red::]" + cond.Status + ""
 			if cond.Status == "True" {
-				status = "[green]" + cond.Status + "[-]"
+				status = "[green::]" + cond.Status + ""
 			}
 			v.writeKeyValue(cond.Type, fmt.Sprintf("%s (%s)", status, cond.Reason))
 			if cond.Message != "" {
-				fmt.Fprintf(v, "    [dim]%s\n", cond.Message)
+				v.writeIndentedLine(2, "[dim::]%s", cond.Message)
 			}
 		}
 		v.writeLine("")
@@ -300,11 +303,16 @@ func (v *DeploymentView) writeSectionHeader(title string) {
 }
 
 func (v *DeploymentView) writeKeyValue(key, value string) {
-	fmt.Fprintf(v, "[teal::]%s[-]: [silver::]%s\n", key, value)
+	fmt.Fprintf(v, "	[teal::]%s: [silver::]%s\n", key, value)
 }
 
 func (v *DeploymentView) writeLine(text string) {
 	fmt.Fprintf(v, "%s\n", text)
+}
+
+func (v *DeploymentView) writeIndentedLine(indent int, format string, args ...interface{}) {
+	indentStr := strings.Repeat("  ", indent)
+	fmt.Fprintf(v, indentStr+format+"\n", args...)
 }
 
 func (v *DeploymentView) displayHealthProbe(name string, probe *model.HealthProbe) {
@@ -313,24 +321,24 @@ func (v *DeploymentView) displayHealthProbe(name string, probe *model.HealthProb
 		if path == "" {
 			path = "/"
 		}
-		fmt.Fprintf(v, "[teal::]%s[-]: [silver::]HTTP %s:%d%s (delay: %ds, period: %ds)\n",
-			name, probe.HTTPGet.Scheme, probe.HTTPGet.Port, path,
-			probe.InitialDelaySeconds, probe.PeriodSeconds)
+		v.writeKeyValue(name, fmt.Sprintf("HTTP %s:%d%s (delay: %ds, period: %ds)",
+			probe.HTTPGet.Scheme, probe.HTTPGet.Port, path,
+			probe.InitialDelaySeconds, probe.PeriodSeconds))
 	}
 }
 
 func getStatusText(ready bool) string {
 	if ready {
-		return "[green::]Ready[-]"
+		return "[green::]Ready"
 	}
-	return "[red::]Not Ready[-]"
+	return "[red::]Not Ready"
 }
 
 func getBoolText(value bool) string {
 	if value {
-		return "[green::]Enabled[-]"
+		return "[green::]Enabled"
 	}
-	return "[red::]Disabled[-]"
+	return "[red::]Disabled"
 }
 
 func formatTime(t time.Time) string {

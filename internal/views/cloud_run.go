@@ -39,10 +39,32 @@ func (v *CloudRunView) HandleRegion(region string) error {
 
 // HandleProject implements CommandHandler
 func (v *CloudRunView) HandleProject(project string) error {
-	v.config.ProjectID = project
-	if err := v.loadServices(); err != nil {
-		return err
+	if project == "" {
+		return fmt.Errorf("project ID cannot be empty")
 	}
+
+	// Create config for the new data source
+	cfg := &datasource.Config{
+		Type:      datasource.GCP,
+		ProjectID: project,
+		Region:    v.config.Region,
+	}
+
+	// Create new data source with the new project
+	newDS, err := datasource.Factory(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to switch to project %s: %v", project, err)
+	}
+
+	// Update view with new project and data source
+	v.config.ProjectID = project
+	v.dataSource = newDS
+
+	// Reload services for the new project
+	if err := v.loadServices(); err != nil {
+		return fmt.Errorf("failed to load services for project %s: %v", project, err)
+	}
+
 	v.updateHeader()
 	return nil
 }

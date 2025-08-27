@@ -62,8 +62,8 @@ func (a *App) Stop() {
 
 // ShowError shows an error message
 func (a *App) ShowError(msg string) {
-	// For now, just print to stderr
-	println(msg)
+	// TODO: Show error in UI status bar or modal
+	// For now, silently ignore errors to avoid console output
 }
 
 // QueueUpdateDraw wraps the tview QueueUpdateDraw to match the UIController interface

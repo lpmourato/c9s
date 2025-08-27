@@ -24,11 +24,13 @@ func NewCommandContainer(app *App, mainView tview.Primitive, handler CommandHand
 	// Create and set up command input
 	cmdInput := NewCommandInput(app, mainView)
 	cmdInput.SetCommandHandler(handler)
+	cmdInput.SetContainer(container.Flex) // Set container reference for layout management
+	cmdInput.SetMainTable(mainView)       // Set main table reference for layout management
 	container.commandView = cmdInput
 
-	// Set up the flex layout
+	// Set up the flex layout - start with only the main view
 	container.AddItem(mainView, 0, 1, true)
-	container.AddItem(cmdInput, 1, 0, false)
+	// Command input will be added dynamically when shown
 
 	// Set up input capture for the container
 	container.SetInputCapture(container.handleKeyEvents)
@@ -58,9 +60,4 @@ func (c *CommandContainer) handleKeyEvents(event *tcell.EventKey) *tcell.EventKe
 // GetCommandInput returns the command input component
 func (c *CommandContainer) GetCommandInput() *CommandInput {
 	return c.commandView
-}
-
-// SetMainFocus sets focus to the main view
-func (c *CommandContainer) SetMainFocus() {
-	c.app.SetFocus(c.mainView)
 }

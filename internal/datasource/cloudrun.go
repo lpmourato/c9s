@@ -66,8 +66,7 @@ func (ds *cloudRunDataSource) GetServices() ([]model.Service, error) {
 	for _, region := range regions {
 		services, err := ds.GetServicesByRegion(region)
 		if err != nil {
-			// Log error but continue with other regions
-			fmt.Printf("Warning: failed to get services in %s: %v\n", region, err)
+			// Skip regions that fail but continue with others
 			continue
 		}
 		allServices = append(allServices, services...)

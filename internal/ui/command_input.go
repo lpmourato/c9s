@@ -31,6 +31,7 @@ type CommandInput struct {
 	handler     CommandHandler
 	visible     bool
 	mainTable   tview.Primitive // The main table to focus when hiding
+	container   *tview.Flex     // Reference to parent container for layout management
 }
 
 // NewCommandInput creates a new command input
@@ -77,7 +78,16 @@ func NewCommandInput(app *App, mainTable tview.Primitive) *CommandInput {
 						}
 					case "project", "proj":
 						if len(parts) > 1 {
-							input.handler.HandleProject(parts[1])
+							input.Show()
+							input.ShowMessage("Switching to project " + parts[1] + "...")
+							// Run project switching asynchronously to keep UI responsive
+							go func(projectName string) {
+								input.handler.HandleProject(projectName)
+								// Hide the message after completion
+								input.app.QueueUpdateDraw(func() {
+									input.Hide()
+								})
+							}(parts[1])
 						}
 					case "service", "svc":
 						if len(parts) > 1 {
@@ -103,19 +113,44 @@ func NewCommandInput(app *App, mainTable tview.Primitive) *CommandInput {
 	return input
 }
 
+// SetContainer sets the parent container reference for layout management
+func (c *CommandInput) SetContainer(container *tview.Flex) {
+	c.container = container
+}
+
+// SetMainTable sets the main table reference for layout management
+func (c *CommandInput) SetMainTable(mainTable tview.Primitive) {
+	c.mainTable = mainTable
+}
+
 // Show makes the command input visible
 func (c *CommandInput) Show() {
-	c.visible = true
-	c.SetText("")
-	c.app.SetFocus(c)
+	if !c.visible {
+		c.visible = true
+		c.SetText("")
+		if c.container != nil {
+			// Clear and rebuild the layout
+			c.container.Clear()
+			c.container.AddItem(c.mainTable, 0, 1, true)
+			c.container.AddItem(c, 1, 0, false)
+		}
+		c.app.SetFocus(c)
+	}
 }
 
 // Hide hides the command input and returns focus to the table
 func (c *CommandInput) Hide() {
-	c.visible = false
-	c.SetText("")
-	if c.app != nil && c.mainTable != nil {
-		c.app.SetFocus(c.mainTable)
+	if c.visible {
+		c.visible = false
+		c.SetText("")
+		if c.container != nil {
+			// Clear and rebuild the layout without the command input
+			c.container.Clear()
+			c.container.AddItem(c.mainTable, 0, 1, true)
+		}
+		if c.app != nil && c.mainTable != nil {
+			c.app.SetFocus(c.mainTable)
+		}
 	}
 }
 
@@ -127,6 +162,20 @@ func (c *CommandInput) IsVisible() bool {
 // SetCommandHandler sets the handler for command execution
 func (c *CommandInput) SetCommandHandler(handler CommandHandler) {
 	c.handler = handler
+}
+
+// ShowMessage displays a message in the command input field
+func (c *CommandInput) ShowMessage(msg string) {
+	if !c.visible {
+		c.visible = true
+		if c.container != nil {
+			// Clear and rebuild the layout
+			c.container.Clear()
+			c.container.AddItem(c.mainTable, 0, 1, true)
+			c.container.AddItem(c, 1, 0, false)
+		}
+	}
+	c.SetText(msg)
 }
 
 // GetSuggestions returns matching command suggestions for the given input

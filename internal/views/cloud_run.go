@@ -258,10 +258,7 @@ func (v *CloudRunView) updateHeader() {
 
 	// Command input/hint row
 	cmdHint := "Type Shift+: for commands"
-	if v.commandInput.IsVisible() {
-		cmdHint = v.commandInput.GetText()
-	}
-	v.headerTable.AddCommandHint(2, cmdHint, v.commandInput.IsVisible())
+	v.headerTable.AddCommandHint(2, cmdHint, false)
 } // showServiceDescription displays detailed information about the selected service
 func (v *CloudRunView) showServiceDescription() {
 	row, _ := v.GetSelection()

@@ -20,6 +20,7 @@ type LogView struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	streamer    model.LogStreamer
+	topMessage  string
 }
 
 func NewLogView(app interfaces.UIController, projectID, serviceName, region string) (*LogView, error) {
@@ -140,6 +141,14 @@ func (v *LogView) streamLogs() {
 			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05.000")
 			message := entry.Message
 
+			// If this is an initial status message, set as topMessage
+			if strings.HasPrefix(message, "Initial load: searching for logs from") {
+				v.topMessage = fmt.Sprintf("[gray::b]%s[-:-:-]\n", message)
+				v.SetText(v.topMessage)
+				v.ScrollToBeginning()
+				return
+			}
+
 			// Parse level from the message content when severity is DEFAULT
 			level := "INFO" // default level
 			message = strings.TrimSpace(message)
@@ -190,10 +199,18 @@ func (v *LogView) streamLogs() {
 				message,
 			)
 
-			// Use Write directly to update TextView
-			fmt.Fprintf(v, "%s", logLine)
+			// Get current content and append new log line, always keeping topMessage at the top
+			currentContent := v.GetText(false)
+			if v.topMessage != "" {
+				// Remove topMessage from currentContent if present
+				currentContent = strings.TrimPrefix(currentContent, v.topMessage)
+				newContent := v.topMessage + currentContent + logLine
+				v.SetText(newContent)
+			} else {
+				v.SetText(currentContent + logLine)
+			}
 
-			// Auto-scroll to bottom
+			// Keep the view scrolled to end to show latest logs
 			v.ScrollToEnd()
 		})
 	}

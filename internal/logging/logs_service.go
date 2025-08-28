@@ -250,9 +250,9 @@ func (s *LogService) fetchLogs(ctx context.Context, baseFilter string, duration 
 		filteredLogs = append(filteredLogs, log)
 	}
 
-	// Sort logs by timestamp in descending order (most recent first)
+	// Sort logs by timestamp in ascending order (oldest first)
 	sort.Slice(filteredLogs, func(i, j int) bool {
-		return filteredLogs[i].Timestamp.After(filteredLogs[j].Timestamp)
+		return filteredLogs[i].Timestamp.Before(filteredLogs[j].Timestamp)
 	})
 
 	// Take only the most recent logs up to maxLogEntries

@@ -52,7 +52,7 @@ func NewDeploymentView(app interfaces.UIController, serviceName, region string) 
 	})
 
 	// Show loading message
-	fmt.Fprintf(v, "[yellow::b]Loading deployment details for %s...\n", serviceName)
+	v.SetText("[yellow::b]Loading deployment details for " + serviceName + "...\n")
 
 	return v
 }

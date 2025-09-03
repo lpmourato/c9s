@@ -1,0 +1,44 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Build binaries
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          echo "Building macOS amd64..."
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X main.version=${GITHUB_SHA}" -o artifacts/c9s-darwin-amd64 ./cmd/c9s
+          echo "Building macOS arm64..."
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X main.version=${GITHUB_SHA}" -o artifacts/c9s-darwin-arm64 ./cmd/c9s
+          echo "Building Windows amd64..."
+          GOOS=windows GOARCH=amd64 go build -ldflags "-X main.version=${GITHUB_SHA}" -o artifacts/c9s-windows-amd64.exe ./cmd/c9s
+          echo "Zipping artifacts..."
+          (cd artifacts && zip -j c9s-darwin-amd64.zip c9s-darwin-amd64)
+          (cd artifacts && zip -j c9s-darwin-arm64.zip c9s-darwin-arm64)
+          (cd artifacts && zip -j c9s-windows-amd64.zip c9s-windows-amd64.exe)
+          (cd artifacts && shasum -a 256 *.zip > checksums.txt)
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: artifacts/*.zip,artifacts/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -10,6 +10,7 @@ import (
 	"github.com/lpmourato/c9s/internal/interfaces"
 	"github.com/lpmourato/c9s/internal/logging"
 	"github.com/lpmourato/c9s/internal/model"
+	"github.com/lpmourato/c9s/internal/ui/tui"
 )
 
 type LogView struct {
@@ -65,15 +66,36 @@ func NewMockLogView(app interfaces.UIController, serviceName, region string) *Lo
 		serviceName)
 	fmt.Fprint(v, loadingMsg)
 
-	// Set up key bindings
-	v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+	// Set up centralized key handler for log view
+	if tuiApp, ok := app.(*tui.App); ok {
+		keyHandler := tui.NewContextualKeyHandler(tuiApp)
+		keyHandler.SetContext(tui.ContextLogView)
+
+		keyHandler.RegisterHandler(tui.ActionEscape, func() error {
 			v.cancel()         // Stop log streaming
 			app.ReturnToMain() // Always return to main view
 			return nil
-		}
-		return event
-	})
+		})
+
+		keyHandler.RegisterHandler(tui.ActionQuit, func() error {
+			v.cancel()
+			app.ReturnToMain()
+			return nil
+		})
+
+		// Set up key bindings
+		v.SetInputCapture(keyHandler.CreateContextualInputCapture())
+	} else {
+		// Fallback to original key handling if not tui.App
+		v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && (event.Rune() == 'q' || event.Rune() == 'Q')) {
+				v.cancel()
+				app.ReturnToMain()
+				return nil
+			}
+			return event
+		})
+	}
 
 	return v
 }
@@ -110,14 +132,35 @@ func NewLogViewWithProvider(app interfaces.UIController, provider model.LogProvi
 	fmt.Fprint(v, loadingMsg)
 
 	// Set up key bindings
-	v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+	// Set up centralized key handler for log view
+	if tuiApp, ok := app.(*tui.App); ok {
+		keyHandler := tui.NewContextualKeyHandler(tuiApp)
+		keyHandler.SetContext(tui.ContextLogView)
+
+		keyHandler.RegisterHandler(tui.ActionEscape, func() error {
 			v.cancel()         // Stop log streaming
 			app.ReturnToMain() // Always return to main view
 			return nil
-		}
-		return event
-	})
+		})
+
+		keyHandler.RegisterHandler(tui.ActionQuit, func() error {
+			v.cancel()
+			app.ReturnToMain()
+			return nil
+		})
+
+		v.SetInputCapture(keyHandler.CreateContextualInputCapture())
+	} else {
+		// Fallback to original key handling
+		v.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+			if event.Key() == tcell.KeyEscape || (event.Key() == tcell.KeyRune && (event.Rune() == 'q' || event.Rune() == 'Q')) {
+				v.cancel()
+				app.ReturnToMain()
+				return nil
+			}
+			return event
+		})
+	}
 
 	return v, nil
 }
@@ -138,7 +181,7 @@ func (v *LogView) streamLogs() {
 	for entry := range logChan {
 		entry := entry // capture for goroutine
 		v.app.QueueUpdateDraw(func() {
-			timestamp := entry.Timestamp.Format("2006-01-02 15:04:05.000")
+			timestamp := entry.Timestamp.Local().Format("2006-01-02 15:04:05.000 MST")
 			message := entry.Message
 
 			// If this is an initial status message, set as topMessage

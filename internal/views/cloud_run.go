@@ -136,36 +136,66 @@ func NewCloudRunView(app *tui.App, cfg *config.CloudRunConfig, ds datasource.Dat
 	cmdContainer := tui.NewCommandContainer(app, mainFlex, view)
 	view.commandInput = cmdContainer.GetCommandInput()
 
-	// Set up additional keyboard shortcuts
-	originalHandler := cmdContainer.GetInputCapture()
-	cmdContainer.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Let command input handle its events first
-		if view.commandInput.IsVisible() {
-			return event
-		}
+	// Create centralized key handler
+	keyHandler := tui.NewContextualKeyHandler(app)
 
-		// Handle view-specific shortcuts
-		switch event.Key() {
-		case tcell.KeyEnter:
-			view.showLogs()
-			return nil
-		case tcell.KeyRune:
-			if event.Rune() == 'd' || event.Rune() == 'D' {
-				view.showDeploymentDetails()
-				return nil
-			}
-			if event.Rune() == 's' || event.Rune() == 'S' {
-				view.showServiceDescription()
-				return nil
-			}
-		}
-
-		// Pass through other events to the default handler
-		if originalHandler != nil {
-			return originalHandler(event)
-		}
-		return event
+	// Register key action handlers
+	keyHandler.RegisterHandler(tui.ActionShowLogs, func() error {
+		view.showLogs()
+		return nil
 	})
+
+	keyHandler.RegisterHandler(tui.ActionEnter, func() error {
+		view.showLogs()
+		return nil
+	})
+
+	keyHandler.RegisterHandler(tui.ActionShowDeploymentDetails, func() error {
+		view.showDeploymentDetails()
+		return nil
+	})
+
+	keyHandler.RegisterHandler(tui.ActionShowServiceDescription, func() error {
+		view.showServiceDescription()
+		return nil
+	})
+
+	keyHandler.RegisterHandler(tui.ActionToggleCommand, func() error {
+		if view.commandInput.IsVisible() {
+			view.commandInput.Hide()
+			keyHandler.SetContext(tui.ContextMain)
+		} else {
+			view.commandInput.Show()
+			keyHandler.SetContext(tui.ContextCommandInput)
+		}
+		return nil
+	})
+
+	keyHandler.RegisterHandler(tui.ActionEscape, func() error {
+		if view.commandInput.IsVisible() {
+			view.commandInput.Hide()
+			keyHandler.SetContext(tui.ContextMain)
+		}
+		return nil
+	})
+
+	keyHandler.RegisterHandler(tui.ActionRefresh, func() error {
+		return view.loadServices() // Use existing loadServices method
+	})
+
+	keyHandler.RegisterHandler(tui.ActionQuit, func() error {
+		app.Stop()
+		return nil
+	})
+
+	// Set up keyboard input handling with context filter
+	cmdContainer.SetInputCapture(keyHandler.CreateInputCaptureWithFilter(func(event *tcell.EventKey) bool {
+		// Let command input handle its events first when visible
+		if view.commandInput.IsVisible() {
+			return event.Key() == tcell.KeyEscape
+		}
+		return true
+	}))
 
 	// Set as main view and update
 	app.SetMainView(cmdContainer)
@@ -228,7 +258,7 @@ func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
 			Expansion: 1,
 		},
 		{
-			Text:      svc.GetLastDeploy().Format("2006-01-02 15:04:05"),
+			Text:      svc.GetLastDeploy().Local().Format("2006-01-02 15:04:05 MST"),
 			Expansion: 1,
 			Align:     tview.AlignRight,
 		},

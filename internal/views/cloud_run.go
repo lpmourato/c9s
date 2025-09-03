@@ -9,15 +9,15 @@ import (
 	"github.com/lpmourato/c9s/internal/config"
 	"github.com/lpmourato/c9s/internal/datasource"
 	"github.com/lpmourato/c9s/internal/model"
-	"github.com/lpmourato/c9s/internal/ui"
+	"github.com/lpmourato/c9s/internal/ui/tui"
 )
 
 // CloudRunView represents the Cloud Run services view
 type CloudRunView struct {
-	*ui.Table
-	app          *ui.App
-	headerTable  *ui.HeaderTable
-	commandInput *ui.CommandInput
+	*tui.Table
+	app          *tui.App
+	headerTable  *tui.HeaderTable
+	commandInput *tui.CommandInput
 	config       *config.CloudRunConfig
 	dataSource   datasource.DataSource
 	services     []model.Service
@@ -25,7 +25,7 @@ type CloudRunView struct {
 }
 
 // Verify CloudRunView implements CommandHandler interface
-var _ ui.CommandHandler = (*CloudRunView)(nil)
+var _ tui.CommandHandler = (*CloudRunView)(nil)
 
 // HandleRegion implements CommandHandler
 func (v *CloudRunView) HandleRegion(region string) error {
@@ -105,13 +105,13 @@ func (v *CloudRunView) HandleQuit() {
 }
 
 // NewCloudRunView returns a new Cloud Run view
-func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, ds datasource.DataSource) *CloudRunView {
-	table := ui.NewTable()
+func NewCloudRunView(app *tui.App, cfg *config.CloudRunConfig, ds datasource.DataSource) *CloudRunView {
+	table := tui.NewTable()
 	table.SetApp(app)
 	table.SetSelectable(true, false)
 
 	// Create header table for session info
-	headerTable := ui.NewHeaderTable()
+	headerTable := tui.NewHeaderTable()
 	headerTable.SetTitle(" Cloud Run Context ")
 
 	view := &CloudRunView{
@@ -133,7 +133,7 @@ func NewCloudRunView(app *ui.App, cfg *config.CloudRunConfig, ds datasource.Data
 		AddItem(table, 0, 1, true)
 
 	// Create command container with keyboard handling
-	cmdContainer := ui.NewCommandContainer(app, mainFlex, view)
+	cmdContainer := tui.NewCommandContainer(app, mainFlex, view)
 	view.commandInput = cmdContainer.GetCommandInput()
 
 	// Set up additional keyboard shortcuts
@@ -209,7 +209,7 @@ func (v *CloudRunView) loadServices() error {
 
 // updateServiceRow updates a single row in the table with service data
 func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
-	cells := []ui.TableCell{
+	cells := []tui.TableCell{
 		{
 			Text:      svc.GetName(),
 			Expansion: 1,
@@ -224,7 +224,7 @@ func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
 		},
 		{
 			Text:      svc.GetStatus(),
-			TextColor: ui.StatusColor(svc.GetStatus()),
+			TextColor: tui.StatusColor(svc.GetStatus()),
 			Expansion: 1,
 		},
 		{
@@ -234,7 +234,7 @@ func (v *CloudRunView) updateServiceRow(row int, svc model.Service) {
 		},
 		{
 			Text:      svc.GetTraffic(),
-			TextColor: ui.TrafficColor(svc.GetTraffic()),
+			TextColor: tui.TrafficColor(svc.GetTraffic()),
 			Expansion: 2,
 		},
 	}

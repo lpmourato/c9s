@@ -8,7 +8,7 @@ import (
 	run "google.golang.org/api/run/v1"
 
 	"github.com/lpmourato/c9s/internal/domain/cloudrun"
-	"github.com/lpmourato/c9s/internal/gcp"
+	"github.com/lpmourato/c9s/internal/infrastructure/gcp"
 	"github.com/lpmourato/c9s/internal/model"
 )
 

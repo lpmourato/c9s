@@ -21,38 +21,47 @@ This project is a fork and adaptation of [k9s](https://github.com/derailed/k9s),
 
 ## Usage
 
-### Build for Apple Silicon (arm64)
+## Build
+
+### Using Make (recommended)
 ```bash
-GOARCH=arm64 GOOS=darwin go build -o c9s
+make build
 ```
 
-### Run
+### Manual build
 ```bash
-./c9s --project=<your-gcp-project> --region=<your-region>
+# build first (optional)
+go build -o bin/c9s ./cmd/c9s
 ```
-Or set environment variables:
+
+### Build for Apple Silicon (arm64)
 ```bash
-export GCP_PROJECT=<your-gcp-project>
-export GCP_REGION=<your-region>
-./c9s
+GOARCH=arm64 GOOS=darwin go build -o bin/c9s ./cmd/c9s
 ```
+
+## Usage
 
 ### Quick examples
 
 - Run against your Cloud Run services (GCP):
 ```bash
-# build first (optional)
-go build -o c9s
-./c9s gcp --project=my-project --region=us-central1
+# Using make
+make run
+
+# Or manually
+./bin/c9s gcp --project=my-project --region=us-central1
 ```
 
 - Run in test mode (uses the bundled mock datasource):
 ```bash
-# subcommand (preferred):
-./c9s mock
+# Using make
+make run-mock
+
+# Or manually - subcommand (preferred):
+./bin/c9s mock
 
 # or equivalent flag:
-./c9s gcp --datasource=mock
+./bin/c9s gcp --datasource=mock
 ```
 
 ## License

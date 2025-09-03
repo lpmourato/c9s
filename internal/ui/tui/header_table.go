@@ -1,4 +1,4 @@
-package ui
+package tui
 
 import (
 	"github.com/derailed/tcell/v2"

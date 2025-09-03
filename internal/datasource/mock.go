@@ -8,16 +8,28 @@ import (
 	"github.com/lpmourato/c9s/internal/model"
 )
 
+func init() {
+	Register(Mock, func(cfg *Config) (DataSource, error) {
+		return newMockDataSource(cfg.MockedData), nil
+	})
+}
+
 type mockDataSource struct {
 	data     []model.Service
 	provider model.CloudRunProvider
 }
 
 func newMockDataSource(data []model.Service) DataSource {
-	provider := &mockProvider{serviceName: "mock-service"}
+	svcName := "mock-service"
+	if len(data) > 0 {
+		svcName = data[0].GetName()
+	}
+
 	return &mockDataSource{
-		data:     data,
-		provider: provider,
+		data: data,
+		provider: &mockProvider{
+			serviceName: svcName,
+		},
 	}
 }
 

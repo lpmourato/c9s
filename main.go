@@ -1,8 +1,10 @@
 package main
 
 import (
-	"flag"
 	"log"
+	"slices"
+
+	"github.com/alecthomas/kong"
 
 	"github.com/lpmourato/c9s/internal/config"
 	"github.com/lpmourato/c9s/internal/datasource"
@@ -11,40 +13,60 @@ import (
 	"github.com/lpmourato/c9s/internal/views"
 )
 
+type CLIStruct struct {
+	Datasource string `kong:"help='Data source to use',default='gcp'"`
+	Project    string `kong:"help='GCP project ID',env='GOOGLE_CLOUD_PROJECT'"`
+	Region     string `kong:"help='Cloud Run region (e.g., us-central1)'"`
+
+	Mock MockCmd `kong:"cmd,help='Run in mock mode'"`
+	Gcp  GcpCmd  `kong:"cmd,help='Run normally',default='1'"`
+}
+
+func (c *CLIStruct) ValidCommands() []string {
+	return []string{"mock", "gcp"}
+}
+
+var CLI CLIStruct
+
+type MockCmd struct{}
+type GcpCmd struct{}
+
 func main() {
-	// Parse command line flags
-	testMode := flag.Bool("test", false, "Run in test mode with mock data")
-	projectID := flag.String("project", "", "GCP project ID")
-	region := flag.String("region", "", "Cloud Run region (e.g., us-central1)")
-	flag.Parse()
+	ctx := kong.Parse(&CLI,
+		kong.Name("c9s"),
+		kong.Description("Cloud Run status UI"),
+	)
 
-	app := ui.NewApp()
+	dsFlag := ctx.Command()
 
-	// Create config with default settings
-	cfg := &config.CloudRunConfig{
-		ProjectID: *projectID, // Set from command line
-		Region:    *region,    // Set from command line
+	if !slices.Contains(CLI.ValidCommands(), dsFlag) {
+		ctx.Fatalf("unsupported datasource %q (allowed: mock,gcp)", dsFlag)
 	}
 
-	// Create data source config based on flags
-	var dsType datasource.Type
+	// Validate project required for GCP
+	if dsFlag == "gcp" && CLI.Project == "" {
+		ctx.Fatalf("project is required for datasource=gcp; set --project or GOOGLE_CLOUD_PROJECT")
+	}
+
+	app := ui.NewApp()
+	cfg := &config.CloudRunConfig{
+		ProjectID: CLI.Project,
+		Region:    CLI.Region,
+	}
 	dsConfig := &datasource.Config{
 		ProjectID:  cfg.ProjectID,
 		Region:     cfg.Region,
 		MockedData: mock.GetDefaultServices(),
 	}
 
-	if *testMode {
-		dsType = datasource.Mock
-	} else {
-		dsType = datasource.GCP
-		if cfg.ProjectID == "" {
-			log.Fatal("Project ID is required. Use --project flag or set GOOGLE_CLOUD_PROJECT environment variable")
-		}
+	// Map flag to datasource.Type
+	switch dsFlag {
+	case "mock":
+		dsConfig.Type = datasource.Mock
+	default:
+		dsConfig.Type = datasource.GCP
 	}
-	dsConfig.Type = dsType
 
-	// Create data source
 	ds, err := datasource.Factory(dsConfig)
 	if err != nil {
 		log.Fatalf("Error creating data source: %v", err)

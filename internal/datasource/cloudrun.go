@@ -115,3 +115,13 @@ func (ds *cloudRunDataSource) GetServiceDetails(name, region string) (*model.Ser
 	ctx := context.Background()
 	return ds.provider.GetServiceDetails(ctx, name, region)
 }
+
+// init registers the GCP data source provider for Cloud Run with the global registry.
+// It associates the GCP identifier with a constructor function that creates a new Cloud Run data source
+// using the provided project ID from the configuration. This enables dynamic selection of the data source
+// based on the configuration at runtime.
+func init() {
+	Register(GCP, func(cfg *Config) (DataSource, error) {
+		return newCloudRunDataSource(cfg.ProjectID)
+	})
+}

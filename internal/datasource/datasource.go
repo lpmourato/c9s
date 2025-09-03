@@ -38,12 +38,19 @@ type DataSource interface {
 
 // Factory creates and returns a DataSource based on config
 func Factory(cfg *Config) (DataSource, error) {
-	switch cfg.Type {
-	case Mock:
-		return newMockDataSource(cfg.MockedData), nil
-	case GCP:
-		return newCloudRunDataSource(cfg.ProjectID)
-	default:
+	constructor, exists := registry[cfg.Type]
+	if !exists {
 		return nil, fmt.Errorf("unsupported data source type: %s", cfg.Type)
 	}
+	return constructor(cfg)
+}
+
+// Constructor defines the function signature for creating a DataSource
+type Constructor func(cfg *Config) (DataSource, error)
+
+var registry = make(map[Type]Constructor)
+
+// Register adds a new DataSource constructor to the registry
+func Register(t Type, c Constructor) {
+	registry[t] = c
 }

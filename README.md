@@ -37,6 +37,24 @@ export GCP_REGION=<your-region>
 ./c9s
 ```
 
+### Quick examples
+
+- Run against your Cloud Run services (GCP):
+```bash
+# build first (optional)
+go build -o c9s
+./c9s gcp --project=my-project --region=us-central1
+```
+
+- Run in test mode (uses the bundled mock datasource):
+```bash
+# subcommand (preferred):
+./c9s mock
+
+# or equivalent flag:
+./c9s gcp --datasource=mock
+```
+
 ## License
 
 This project inherits the [Apache 2.0 License](https://github.com/derailed/k9s/blob/master/LICENSE) from k9s.

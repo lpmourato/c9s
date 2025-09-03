@@ -45,9 +45,9 @@ func StatusColor(status string) tcell.Color {
 	switch status {
 	case "Ready":
 		return tcell.ColorGreen
-	case "Failed":
+	case "Not Ready":
 		return tcell.ColorRed
-	case "Updating":
+	case "Unknown":
 		return tcell.ColorYellow
 	default:
 		return tcell.ColorGray

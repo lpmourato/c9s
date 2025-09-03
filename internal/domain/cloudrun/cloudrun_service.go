@@ -73,7 +73,23 @@ func (s *CloudRunGCPService) GetTrafficAllocation() string {
 
 // RefreshStatus updates the service status from the raw GCP service data
 func (s *CloudRunGCPService) RefreshStatus() {
-	s.Status = s.rawService.Status.Conditions[0].Status
+	// Find the Ready condition and translate GCP condition status (True/False/Unknown)
+	// into semantic strings used by the UI: "Ready", "Not Ready", "Unknown".
+	translated := "Unknown"
+	for _, cond := range s.rawService.Status.Conditions {
+		if cond.Type == "Ready" {
+			switch cond.Status {
+			case "True":
+				translated = "Ready"
+			case "False":
+				translated = "Not Ready"
+			default:
+				translated = "Unknown"
+			}
+			break
+		}
+	}
+	s.Status = translated
 	s.LastDeploy = s.GetLastDeployTime()
 	s.Traffic = s.GetTrafficAllocation()
 }
